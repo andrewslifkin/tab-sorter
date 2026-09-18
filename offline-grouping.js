@@ -6,18 +6,158 @@
  * 
  * CLASSIFICATION PRIORITY (highest to lowest):
  * 1. Skip ungroupable: pinned, chrome://, chrome-extension://
- * 2. Known site map: curated hostname suffix → group label + color
- * 3. Hostname family merge: related subdomains → single group
- * 4. Title keywords: weak domain hints from tab titles
- * 5. ETLD+1 fallback: cluster by registrable domain
- * 6. Group size policy: merge small groups, cap at 12, handle singletons
- * 7. Stable naming: consistent short labels and colors
+ * 2. Project/subject extraction: Jira projects, Confluence spaces, SharePoint sites, GitHub repos, etc.
+ * 3. Known site map: curated hostname suffix → group label + color
+ * 4. Hostname family merge: related subdomains → single group (fallback only)
+ * 5. Title keywords: weak domain hints from tab titles
+ * 6. ETLD+1 fallback: cluster by registrable domain
+ * 7. Group size policy: merge small groups, cap at 12, handle singletons
+ * 8. Stable naming: consistent short labels and colors
  */
+
+// ============================================================================
+// PROJECT / SUBJECT EXTRACTION
+// Extract project context from URLs and titles to avoid vendor mega-groups
+// ============================================================================
+
+/**
+ * Extract project/subject context from tab
+ * Priority over vendor grouping to avoid mega-groups
+ * @param {Object} tab - Tab object with {id, title, url}
+ * @param {URL} url - Parsed URL object
+ * @returns {Object|null} {groupName, color} or null if no project found
+ */
+function extractProjectContext(tab, url) {
+  const hostname = url.hostname.toLowerCase();
+  const pathname = url.pathname;
+  const title = tab.title || '';
+  const searchParams = url.searchParams;
+  
+  // Atlassian (Jira, Confluence, etc.)
+  if (hostname.includes('atlassian.net') || hostname.includes('jira.com')) {
+    // Extract Jira project key from URL or title
+    // Patterns: /browse/PROJ-123, /selectedIssue=PROJ-123, [PROJ-123] in title
+    
+    // Check URL pathname for /browse/PROJECTKEY-number
+    const browseMatch = pathname.match(/\/browse\/([A-Z][A-Z0-9]+)-\d+/);
+    if (browseMatch) {
+      return { groupName: `Jira ${browseMatch[1]}`, color: 'blue' };
+    }
+    
+    // Check URL search params for selectedIssue
+    const selectedIssue = searchParams.get('selectedIssue');
+    if (selectedIssue) {
+      const issueMatch = selectedIssue.match(/^([A-Z][A-Z0-9]+)-\d+$/);
+      if (issueMatch) {
+        return { groupName: `Jira ${issueMatch[1]}`, color: 'blue' };
+      }
+    }
+    
+    // Check title for [PROJECTKEY-123] or PROJECTKEY-123
+    const titleMatch = title.match(/\b([A-Z][A-Z0-9]+)-\d+\b/);
+    if (titleMatch) {
+      return { groupName: `Jira ${titleMatch[1]}`, color: 'blue' };
+    }
+    
+    // Confluence space detection
+    if (pathname.includes('/wiki/spaces/')) {
+      const spaceMatch = pathname.match(/\/wiki\/spaces\/([^\/]+)/);
+      if (spaceMatch) {
+        const spaceKey = spaceMatch[1].toUpperCase();
+        return { groupName: `Confluence ${spaceKey}`, color: 'blue' };
+      }
+    }
+    
+    // Fallback: check if it's clearly Jira or Confluence from path
+    if (pathname.includes('/browse/') || pathname.includes('/jira/')) {
+      return { groupName: 'Jira', color: 'blue' };
+    }
+    if (pathname.includes('/wiki/') || pathname.includes('/confluence/')) {
+      return { groupName: 'Confluence', color: 'blue' };
+    }
+    
+    // No project signal, return null to fall through to vendor family
+    return null;
+  }
+  
+  // Microsoft SharePoint
+  if (hostname.includes('sharepoint.com')) {
+    // Extract site name from URL: https://company.sharepoint.com/sites/sitename/
+    const siteMatch = pathname.match(/\/sites\/([^\/]+)/);
+    if (siteMatch) {
+      const siteName = siteMatch[1].replace(/-/g, ' ');
+      const titleCase = siteName.split(' ').map(w => 
+        w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
+      ).join(' ');
+      return { groupName: `SP ${titleCase}`, color: 'blue' };
+    }
+    
+    // No site path, fall through to generic SharePoint
+    return null;
+  }
+  
+  // Microsoft Teams
+  if (hostname.includes('teams.microsoft.com')) {
+    // Try to extract team/channel from title
+    // Title format often: "Channel Name | Team Name | Microsoft Teams"
+    const titleParts = title.split('|').map(p => p.trim());
+    if (titleParts.length >= 2 && titleParts[titleParts.length - 1].includes('Teams')) {
+      const teamName = titleParts[titleParts.length - 2];
+      if (teamName && teamName.length > 0 && teamName.length < 30) {
+        return { groupName: `Teams ${teamName}`, color: 'purple' };
+      }
+    }
+    
+    // Fallback to generic Teams
+    return { groupName: 'Microsoft Teams', color: 'purple' };
+  }
+  
+  // Azure DevOps
+  if (hostname.includes('dev.azure.com') || hostname.includes('visualstudio.com')) {
+    // Extract project from URL: dev.azure.com/org/project/
+    const projectMatch = pathname.match(/\/[^\/]+\/([^\/]+)/);
+    if (projectMatch) {
+      const projectName = projectMatch[1].replace(/-|_/g, ' ');
+      const titleCase = projectName.split(' ').map(w => 
+        w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
+      ).join(' ');
+      return { groupName: `ADO ${titleCase}`, color: 'blue' };
+    }
+    
+    // Fallback to generic Azure DevOps
+    return { groupName: 'Azure DevOps', color: 'blue' };
+  }
+  
+  // GitHub org/repo
+  if (hostname === 'github.com') {
+    // Extract org/repo from URL: github.com/org/repo
+    const repoMatch = pathname.match(/^\/([^\/]+)\/([^\/]+)/);
+    if (repoMatch && repoMatch[1] && repoMatch[2]) {
+      const org = repoMatch[1];
+      const repo = repoMatch[2];
+      
+      // Skip user pages, settings, etc.
+      if (['settings', 'notifications', 'pulls', 'issues', 'explore', 'dashboard'].includes(org)) {
+        return { groupName: 'GitHub', color: 'grey' };
+      }
+      
+      // Use repo name as group (shorter than org/repo)
+      return { groupName: repo, color: 'grey' };
+    }
+    
+    // Fallback to generic GitHub for dashboard/pulls/etc.
+    return { groupName: 'GitHub', color: 'grey' };
+  }
+  
+  // No project context found
+  return null;
+}
 
 // ============================================================================
 // CURATED SITE MAP
 // Maps hostname suffixes to [groupName, color, priority]
 // Priority: lower number = higher priority (for subdomain conflicts)
+// Note: Atlassian and some Microsoft entries removed/reduced to let project extraction take priority
 // ============================================================================
 
 const KNOWN_SITES = {
@@ -32,17 +172,14 @@ const KNOWN_SITES = {
   'chat.google.com': ['Google Chat', 'green', 1],
   'keep.google.com': ['Google Keep', 'yellow', 1],
   
-  // Microsoft 365
+  // Microsoft 365 (reduced - most handled by project extraction)
   'outlook.office.com': ['Outlook', 'blue', 1],
   'outlook.live.com': ['Outlook', 'blue', 1],
-  'teams.microsoft.com': ['Microsoft Teams', 'purple', 1],
   'office.com': ['Microsoft Office', 'blue', 1],
   'onedrive.live.com': ['OneDrive', 'blue', 1],
-  'sharepoint.com': ['SharePoint', 'blue', 2],
   'microsoft365.com': ['Microsoft 365', 'blue', 1],
   
-  // Development & Code
-  'github.com': ['GitHub', 'grey', 1],
+  // Development & Code (GitHub handled by project extraction)
   'gist.github.com': ['GitHub', 'grey', 1],
   'gitlab.com': ['GitLab', 'orange', 1],
   'bitbucket.org': ['Bitbucket', 'blue', 1],
@@ -51,10 +188,7 @@ const KNOWN_SITES = {
   'serverfault.com': ['Stack Overflow', 'orange', 2],
   'superuser.com': ['Stack Overflow', 'orange', 2],
   
-  // Project Management
-  'atlassian.net': ['Atlassian', 'blue', 2],
-  'jira.com': ['Jira', 'blue', 1],
-  'confluence.com': ['Confluence', 'blue', 1],
+  // Project Management (Atlassian handled by project extraction)
   'trello.com': ['Trello', 'blue', 1],
   'asana.com': ['Asana', 'pink', 1],
   'monday.com': ['Monday', 'red', 1],
@@ -177,18 +311,19 @@ const KNOWN_SITES = {
 // ============================================================================
 // HOSTNAME FAMILY PATTERNS
 // Regex patterns that should be merged into a single group
+// Used as FALLBACK only when project extraction finds nothing
+// Atlassian and Microsoft patterns reduced to serve only as last resort
 // ============================================================================
 
 const HOSTNAME_FAMILIES = [
   // Google services (catch-all for unlisted subdomains)
   { pattern: /^[^.]+\.google\.com$/, group: 'Google', color: 'blue' },
   
-  // Microsoft domains
+  // Microsoft domains (fallback only - project extraction should catch most)
   { pattern: /^[^.]+\.microsoft\.com$/, group: 'Microsoft', color: 'blue' },
   { pattern: /^[^.]+\.live\.com$/, group: 'Microsoft', color: 'blue' },
-  { pattern: /^[^.]+\.office\.com$/, group: 'Microsoft Office', color: 'blue' },
   
-  // Atlassian
+  // Atlassian (fallback only - project extraction should catch most)
   { pattern: /^[^.]+\.atlassian\.net$/, group: 'Atlassian', color: 'blue' },
   
   // Slack workspaces
@@ -324,19 +459,25 @@ function classifyTab(tab) {
     const hostname = url.hostname.toLowerCase();
     const title = (tab.title || '').toLowerCase();
     
-    // Priority 1: Check known sites (exact suffix match)
+    // Priority 1: Project/subject extraction (Jira projects, SharePoint sites, etc.)
+    const projectContext = extractProjectContext(tab, url);
+    if (projectContext) {
+      return projectContext;
+    }
+    
+    // Priority 2: Check known sites (exact suffix match)
     const knownSite = findKnownSite(hostname);
     if (knownSite) {
       return { groupName: knownSite.name, color: knownSite.color };
     }
     
-    // Priority 2: Check hostname families (pattern match)
+    // Priority 3: Check hostname families (pattern match fallback)
     const family = findHostnameFamily(hostname);
     if (family) {
       return { groupName: family.group, color: family.color };
     }
     
-    // Priority 3: Title keyword hints (only for generic domains)
+    // Priority 4: Title keyword hints (only for generic domains)
     if (isGenericDomain(hostname)) {
       const keywordGroup = findTitleKeyword(title);
       if (keywordGroup) {
@@ -347,7 +488,7 @@ function classifyTab(tab) {
       }
     }
     
-    // Priority 4: ETLD+1 fallback - use registrable domain
+    // Priority 5: ETLD+1 fallback - use registrable domain
     const domainLabel = extractDomainLabel(hostname);
     return { 
       groupName: domainLabel, 
@@ -547,7 +688,15 @@ function isKnownGroupName(name) {
     HOSTNAME_FAMILIES.map(f => f.group)
   );
   
-  return knownNames.has(name) || familyNames.has(name) || Object.keys(DEFAULT_COLORS).includes(name);
+  // Check if it's a project-based group (starts with known prefixes)
+  const isProjectGroup = 
+    name.startsWith('Jira ') ||
+    name.startsWith('Confluence ') ||
+    name.startsWith('SP ') ||
+    name.startsWith('Teams ') ||
+    name.startsWith('ADO ');
+  
+  return knownNames.has(name) || familyNames.has(name) || Object.keys(DEFAULT_COLORS).includes(name) || isProjectGroup;
 }
 
 // ============================================================================
@@ -559,6 +708,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     groupTabsOffline,
     classifyTab,
+    extractProjectContext,
     KNOWN_SITES,
     HOSTNAME_FAMILIES,
   };
@@ -567,6 +717,7 @@ if (typeof module !== 'undefined' && module.exports) {
   window.OfflineGrouping = {
     groupTabsOffline,
     classifyTab,
+    extractProjectContext,
     KNOWN_SITES,
     HOSTNAME_FAMILIES,
   };

@@ -43,7 +43,7 @@ const FIXTURE_WORK_MORNING = [
   { id: 1, title: 'Gmail - Inbox', url: 'https://mail.google.com/mail/u/0/#inbox', pinned: false },
   { id: 2, title: 'GitHub - Pull Requests', url: 'https://github.com/pulls', pinned: false },
   { id: 3, title: 'Slack - Engineering', url: 'https://mycompany.slack.com/messages/engineering', pinned: false },
-  { id: 4, title: 'JIRA - Sprint Board', url: 'https://mycompany.atlassian.net/jira/software/projects/ENG/boards/1', pinned: false },
+  { id: 4, title: '[ENG-123] JIRA - Sprint Board', url: 'https://mycompany.atlassian.net/browse/ENG-123', pinned: false },
   { id: 5, title: 'Google Docs - Q1 Planning', url: 'https://docs.google.com/document/d/abc123', pinned: false },
   { id: 6, title: 'Google Sheets - Budget', url: 'https://sheets.google.com/spreadsheets/d/xyz789', pinned: false },
   { id: 7, title: 'Notion - Team Wiki', url: 'https://notion.so/workspace/team-wiki', pinned: false },
@@ -101,6 +101,53 @@ const FIXTURE_MANY_SINGLETONS = [
 ];
 
 // ============================================================================
+// PROJECT EXTRACTION FIXTURES
+// ============================================================================
+
+const FIXTURE_MULTI_JIRA_PROJECTS = [
+  { id: 1, title: '[PROOF-123] Implement feature', url: 'https://company.atlassian.net/browse/PROOF-123', pinned: false },
+  { id: 2, title: '[PROOF-456] Fix bug', url: 'https://company.atlassian.net/browse/PROOF-456', pinned: false },
+  { id: 3, title: '[MARKET-789] Update docs', url: 'https://company.atlassian.net/browse/MARKET-789', pinned: false },
+  { id: 4, title: '[MARKET-101] New campaign', url: 'https://company.atlassian.net/browse/MARKET-101', pinned: false },
+  { id: 5, title: '[ENG-555] Refactor', url: 'https://company.atlassian.net/browse/ENG-555', pinned: false },
+];
+
+const FIXTURE_CONFLUENCE_SPACES = [
+  { id: 1, title: 'Engineering Space - Home', url: 'https://company.atlassian.net/wiki/spaces/ENG/overview', pinned: false },
+  { id: 2, title: 'Engineering Docs', url: 'https://company.atlassian.net/wiki/spaces/ENG/pages/123', pinned: false },
+  { id: 3, title: 'Product Specs', url: 'https://company.atlassian.net/wiki/spaces/PROD/overview', pinned: false },
+  { id: 4, title: 'Marketing Wiki', url: 'https://company.atlassian.net/wiki/spaces/MKT/pages/456', pinned: false },
+];
+
+const FIXTURE_SHAREPOINT_SITES = [
+  { id: 1, title: 'Engineering Site - Home', url: 'https://company.sharepoint.com/sites/engineering/SitePages/Home.aspx', pinned: false },
+  { id: 2, title: 'Engineering Docs', url: 'https://company.sharepoint.com/sites/engineering/Shared%20Documents/Forms/AllItems.aspx', pinned: false },
+  { id: 3, title: 'Marketing Site', url: 'https://company.sharepoint.com/sites/marketing/SitePages/Home.aspx', pinned: false },
+  { id: 4, title: 'HR Portal', url: 'https://company.sharepoint.com/sites/hr-portal/Lists/Announcements/AllItems.aspx', pinned: false },
+];
+
+const FIXTURE_MIXED_MICROSOFT = [
+  { id: 1, title: 'Inbox - Outlook', url: 'https://outlook.office.com/mail/inbox', pinned: false },
+  { id: 2, title: 'Engineering Team | Microsoft Teams', url: 'https://teams.microsoft.com/l/team/abc', pinned: false },
+  { id: 3, title: 'Marketing Team | Microsoft Teams', url: 'https://teams.microsoft.com/l/team/xyz', pinned: false },
+  { id: 4, title: 'Engineering SharePoint', url: 'https://company.sharepoint.com/sites/engineering/SitePages/Home.aspx', pinned: false },
+  { id: 5, title: 'OneDrive - Personal', url: 'https://onedrive.live.com/personal', pinned: false },
+];
+
+const FIXTURE_GITHUB_REPOS = [
+  { id: 1, title: 'tab-sorter: Issues', url: 'https://github.com/andrewslifkin/tab-sorter/issues', pinned: false },
+  { id: 2, title: 'tab-sorter: Pull Requests', url: 'https://github.com/andrewslifkin/tab-sorter/pulls', pinned: false },
+  { id: 3, title: 'awesome-project: README', url: 'https://github.com/someorg/awesome-project', pinned: false },
+  { id: 4, title: 'GitHub Dashboard', url: 'https://github.com/dashboard', pinned: false },
+];
+
+const FIXTURE_AZURE_DEVOPS = [
+  { id: 1, title: 'Project Alpha - Boards', url: 'https://dev.azure.com/company/project-alpha/_boards', pinned: false },
+  { id: 2, title: 'Project Alpha - Repos', url: 'https://dev.azure.com/company/project-alpha/_git', pinned: false },
+  { id: 3, title: 'Project Beta - Overview', url: 'https://dev.azure.com/company/project-beta', pinned: false },
+];
+
+// ============================================================================
 // CLASSIFICATION TESTS
 // ============================================================================
 
@@ -122,12 +169,29 @@ const slackTab = { id: 3, title: 'Slack', url: 'https://mycompany.slack.com/', p
 const slackClassification = classifyTab(slackTab);
 assertEqual(slackClassification.groupName, 'Slack', 'Slack workspace classified correctly');
 
-const atlassianTab = { id: 4, title: 'Jira', url: 'https://company.atlassian.net/browse/PROJ-123', pinned: false };
-const atlassianClassification = classifyTab(atlassianTab);
-assertEqual(atlassianClassification.groupName, 'Atlassian', 'Atlassian site classified correctly');
+// Test project extraction - Jira
+const jiraTab = { id: 4, title: '[PROOF-123] Test issue', url: 'https://company.atlassian.net/browse/PROOF-123', pinned: false };
+const jiraClassification = classifyTab(jiraTab);
+assertEqual(jiraClassification.groupName, 'Jira PROOF', 'Jira project extracted correctly');
+assertEqual(jiraClassification.color, 'blue', 'Jira project gets correct color');
+
+// Test project extraction - Confluence
+const confluenceTab = { id: 5, title: 'Engineering Docs', url: 'https://company.atlassian.net/wiki/spaces/ENG/overview', pinned: false };
+const confluenceClassification = classifyTab(confluenceTab);
+assertEqual(confluenceClassification.groupName, 'Confluence ENG', 'Confluence space extracted correctly');
+
+// Test project extraction - SharePoint
+const sharepointTab = { id: 6, title: 'Engineering Site', url: 'https://company.sharepoint.com/sites/engineering/SitePages/Home.aspx', pinned: false };
+const sharepointClassification = classifyTab(sharepointTab);
+assertEqual(sharepointClassification.groupName, 'SP Engineering', 'SharePoint site extracted correctly');
+
+// Test project extraction - GitHub repo
+const repoTab = { id: 7, title: 'tab-sorter: Issues', url: 'https://github.com/andrewslifkin/tab-sorter/issues', pinned: false };
+const repoClassification = classifyTab(repoTab);
+assertEqual(repoClassification.groupName, 'tab-sorter', 'GitHub repo extracted correctly');
 
 // Test ETLD+1 fallback
-const unknownTab = { id: 5, title: 'Example', url: 'https://example.com/', pinned: false };
+const unknownTab = { id: 8, title: 'Example', url: 'https://example.com/', pinned: false };
 const unknownClassification = classifyTab(unknownTab);
 assertEqual(unknownClassification.groupName, 'Example', 'Unknown domain uses title case domain');
 
@@ -144,9 +208,12 @@ assert(workGroups.length <= 12, 'Work morning produces ≤12 groups');
 assertGroupExists(workGroups, 'Gmail', 'Work morning includes Gmail group');
 assertGroupExists(workGroups, 'GitHub', 'Work morning includes GitHub group');
 assertGroupExists(workGroups, 'Slack', 'Work morning includes Slack group');
-assertGroupExists(workGroups, 'Atlassian', 'Work morning includes Atlassian group');
 assertGroupExists(workGroups, 'Google Docs', 'Work morning includes Google Docs group');
 assertGroupHasTabs(workGroups, 'Google Docs', 2, 'Google Docs group has 2 tabs (Docs + Sheets)');
+
+// Note: Jira tabs in FIXTURE_WORK_MORNING now extract to project-specific groups instead of "Atlassian"
+const hasJiraGroup = workGroups.some(g => g.name.startsWith('Jira') || g.name === 'Atlassian');
+assert(hasJiraGroup, 'Work morning includes Jira/Atlassian group');
 
 // Test multi-Google fixture
 const googleGroups = groupTabsOffline(FIXTURE_MULTI_GOOGLE);
@@ -189,6 +256,64 @@ assert(hasOtherGroup, 'Many singletons create an "Other" group');
 if (hasOtherGroup) {
   assertGroupHasTabs(singletonGroups, 'Other', 5, 'Other group contains all 5 singletons');
 }
+
+// ============================================================================
+// PROJECT EXTRACTION TESTS
+// ============================================================================
+
+console.log('\n=== Project Extraction Tests ===\n');
+
+// Test multiple Jira projects - should NOT collapse into one group
+const jiraProjectGroups = groupTabsOffline(FIXTURE_MULTI_JIRA_PROJECTS);
+assertGroupExists(jiraProjectGroups, 'Jira PROOF', 'Multi-Jira includes PROOF project');
+assertGroupExists(jiraProjectGroups, 'Jira MARKET', 'Multi-Jira includes MARKET project');
+assertGroupExists(jiraProjectGroups, 'Jira ENG', 'Multi-Jira includes ENG project');
+assertGroupHasTabs(jiraProjectGroups, 'Jira PROOF', 2, 'Jira PROOF has 2 issues');
+assertGroupHasTabs(jiraProjectGroups, 'Jira MARKET', 2, 'Jira MARKET has 2 issues');
+assertGroupHasTabs(jiraProjectGroups, 'Jira ENG', 1, 'Jira ENG has 1 issue');
+assert(jiraProjectGroups.length === 3, 'Multi-Jira creates 3 separate project groups');
+
+// Test Confluence spaces - should NOT collapse into one group
+const confluenceGroups = groupTabsOffline(FIXTURE_CONFLUENCE_SPACES);
+assertGroupExists(confluenceGroups, 'Confluence ENG', 'Confluence includes ENG space');
+assertGroupExists(confluenceGroups, 'Confluence PROD', 'Confluence includes PROD space');
+assertGroupExists(confluenceGroups, 'Confluence MKT', 'Confluence includes MKT space');
+assertGroupHasTabs(confluenceGroups, 'Confluence ENG', 2, 'Confluence ENG has 2 pages');
+assert(confluenceGroups.length === 3, 'Confluence creates 3 separate space groups');
+
+// Test SharePoint sites - should NOT collapse into one group
+const sharepointGroups = groupTabsOffline(FIXTURE_SHAREPOINT_SITES);
+assertGroupExists(sharepointGroups, 'SP Engineering', 'SharePoint includes Engineering site');
+assertGroupExists(sharepointGroups, 'SP Marketing', 'SharePoint includes Marketing site');
+assertGroupExists(sharepointGroups, 'SP Hr Portal', 'SharePoint includes HR Portal site');
+assertGroupHasTabs(sharepointGroups, 'SP Engineering', 2, 'SP Engineering has 2 pages');
+assert(sharepointGroups.length === 3, 'SharePoint creates 3 separate site groups');
+
+// Test mixed Microsoft - should NOT all be "Microsoft"
+const mixedMsGroups = groupTabsOffline(FIXTURE_MIXED_MICROSOFT);
+assertGroupExists(mixedMsGroups, 'Outlook', 'Mixed Microsoft includes Outlook');
+assertGroupExists(mixedMsGroups, 'Teams Engineering Team', 'Mixed Microsoft includes Engineering Team');
+assertGroupExists(mixedMsGroups, 'Teams Marketing Team', 'Mixed Microsoft includes Marketing Team');
+assertGroupExists(mixedMsGroups, 'SP Engineering', 'Mixed Microsoft includes Engineering SharePoint');
+assertGroupExists(mixedMsGroups, 'OneDrive', 'Mixed Microsoft includes OneDrive');
+assert(mixedMsGroups.length === 5, 'Mixed Microsoft creates 5 separate groups (not one Microsoft mega-group)');
+const hasMicrosoftMegaGroup = mixedMsGroups.some(g => g.name === 'Microsoft' && g.tabIds.length > 1);
+assert(!hasMicrosoftMegaGroup, 'Mixed Microsoft does NOT create a Microsoft mega-group');
+
+// Test GitHub repos - should group by repo
+const githubRepoGroups = groupTabsOffline(FIXTURE_GITHUB_REPOS);
+assertGroupExists(githubRepoGroups, 'tab-sorter', 'GitHub includes tab-sorter repo');
+assertGroupExists(githubRepoGroups, 'awesome-project', 'GitHub includes awesome-project repo');
+assertGroupExists(githubRepoGroups, 'GitHub', 'GitHub includes generic GitHub group');
+assertGroupHasTabs(githubRepoGroups, 'tab-sorter', 2, 'tab-sorter repo has 2 tabs');
+assert(githubRepoGroups.length === 3, 'GitHub creates 3 groups (2 repos + dashboard)');
+
+// Test Azure DevOps projects
+const adoGroups = groupTabsOffline(FIXTURE_AZURE_DEVOPS);
+assertGroupExists(adoGroups, 'ADO Project Alpha', 'Azure DevOps includes Project Alpha');
+assertGroupExists(adoGroups, 'ADO Project Beta', 'Azure DevOps includes Project Beta');
+assertGroupHasTabs(adoGroups, 'ADO Project Alpha', 2, 'ADO Project Alpha has 2 tabs');
+assert(adoGroups.length === 2, 'Azure DevOps creates 2 project groups');
 
 // ============================================================================
 // DETERMINISM TESTS

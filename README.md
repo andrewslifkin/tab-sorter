@@ -63,12 +63,22 @@ Chrome Manifest V3 extension that organizes open tabs into native Chrome tab gro
 **Perfect for corporate/MDM-managed machines that block AI APIs!**
 
 Offline mode uses a comprehensive rules-based engine that:
-- ✅ Recognizes 100+ popular services (Google Workspace, GitHub, Slack, Jira, Figma, AWS, etc.)
-- ✅ Groups related subdomains (all Google Docs tabs together, all Atlassian tools, etc.)
+- ✅ **Project-over-vendor grouping**: Jira tabs group by project key (PROOF, MARKET), not all into "Jira"
+- ✅ **Subject extraction**: SharePoint by site, Teams by team, Confluence by space, GitHub by repo
+- ✅ Recognizes 100+ popular services (Google Workspace, Slack, Figma, AWS, etc.)
+- ✅ Groups related subdomains when no project signal (all Google Docs tabs together)
 - ✅ Uses smart heuristics for unknown sites
 - ✅ Creates 3-12 logical groups with stable names and colors
 - ✅ Works instantly without network calls
 - ✅ Deterministic results (same tabs → same groups)
+
+**Project/Subject Extraction Examples:**
+- **Jira**: `PROOF-123`, `MARKET-456` → separate "Jira PROOF" and "Jira MARKET" groups (not one "Jira" mega-group)
+- **Confluence**: `/wiki/spaces/ENG`, `/wiki/spaces/PROD` → "Confluence ENG", "Confluence PROD"
+- **SharePoint**: `/sites/engineering`, `/sites/marketing` → "SP Engineering", "SP Marketing"
+- **Microsoft Teams**: "Engineering Team | Microsoft Teams" → "Teams Engineering Team"
+- **Azure DevOps**: `/company/project-alpha` → "ADO Project Alpha"
+- **GitHub**: `github.com/org/repo` → groups by repo name
 
 **To use offline mode**: Select "Offline" in the options page. No API key needed.
 
@@ -107,11 +117,13 @@ Offline mode uses a comprehensive rules-based engine that:
 
 **Offline Mode**:
 - Uses layered classification (see offline-grouping.js for details):
-  1. Known site map: 100+ curated services with preset group names
-  2. Hostname family merging: related subdomains grouped together
-  3. Title keyword hints: PR, standup, invoice keywords inform grouping
-  4. ETLD+1 fallback: unknown sites clustered by domain
-  5. Smart sizing: merges tiny groups, caps at 12, handles singletons intelligently
+  1. **Project/subject extraction** (highest priority): Jira project keys, Confluence spaces, SharePoint sites, Teams channels, Azure DevOps projects, GitHub repos — avoids vendor mega-groups
+  2. Known site map: 100+ curated services with preset group names
+  3. Hostname family merging: related subdomains grouped together (fallback when no project signal)
+  4. Title keyword hints: PR, standup, invoice keywords inform grouping
+  5. ETLD+1 fallback: unknown sites clustered by domain
+  6. Smart sizing: merges tiny groups, caps at 12, handles singletons intelligently
+- **Prefers project over vendor**: Multiple Jira projects → separate "Jira PROOF", "Jira MARKET" groups (not one "Atlassian" mega-group)
 - Stable, deterministic results
 - No network required
 
@@ -172,7 +184,12 @@ tab-sorter/
 **Offline Mode**:
 1. **User clicks icon** → `chrome.action.onClicked` listener fires
 2. **Collect tabs** → Query all tabs in current window, filter non-groupable
-3. **Classify tabs** → Apply rules engine (known sites → families → keywords → domain fallback)
+3. **Classify tabs** → Apply rules engine:
+   - Extract project/subject context (Jira projects, SharePoint sites, Teams, etc.)
+   - Check known sites map
+   - Apply hostname family patterns (fallback)
+   - Check title keywords
+   - Domain fallback
 4. **Apply policies** → Smart group sizing, merge unknowns, handle singletons
 5. **Ungroup existing** → Remove existing tab groups in the window
 6. **Create groups** → Use `chrome.tabs.group` and `chrome.tabGroups.update` APIs
@@ -187,8 +204,10 @@ node offline-grouping.test.js
 ```
 
 Tests cover:
-- Classification of known sites and families
+- Classification of known sites, project extraction, and families
 - Grouping logic with real-world fixtures (work morning, multi-service, etc.)
+- Project extraction: multiple Jira projects, Confluence spaces, SharePoint sites, GitHub repos
+- No vendor mega-groups: verifies Atlassian/Microsoft tabs stay separate by project/site
 - Edge cases (empty input, only ungroupable tabs, singletons)
 - Determinism (same input always produces same output)
 
@@ -200,6 +219,7 @@ Tests cover:
 - Modify ungrouping behavior in `organizeTabs()`
 
 **Offline Mode**: Edit `offline-grouping.js`:
+- Modify `extractProjectContext()` to add more project/subject extraction patterns
 - Add sites to `KNOWN_SITES` map (hostname suffix → [name, color, priority])
 - Add patterns to `HOSTNAME_FAMILIES` for subdomain merging
 - Adjust title keywords in `TITLE_KEYWORDS`
