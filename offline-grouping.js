@@ -713,8 +713,8 @@ if (typeof module !== 'undefined' && module.exports) {
     HOSTNAME_FAMILIES,
   };
 } else {
-  // Browser - expose to global scope
-  window.OfflineGrouping = {
+  // Browser - expose to global scope (service worker compatible)
+  globalThis.OfflineGrouping = {
     groupTabsOffline,
     classifyTab,
     extractProjectContext,

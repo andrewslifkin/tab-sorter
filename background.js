@@ -67,7 +67,7 @@ async function organizeTabs() {
   // Handle offline provider
   if (provider === 'offline') {
     // Use offline grouping (rules-based)
-    groups = window.OfflineGrouping.groupTabsOffline(tabs);
+    groups = globalThis.OfflineGrouping.groupTabsOffline(tabs);
   } else {
     // Try AI provider with auto-fallback to offline
     let apiKey;
@@ -101,7 +101,7 @@ async function organizeTabs() {
       // Auto-fallback to offline grouping
       console.warn(`AI provider failed (${error.message}), falling back to offline grouping`);
       
-      groups = window.OfflineGrouping.groupTabsOffline(tabs);
+      groups = globalThis.OfflineGrouping.groupTabsOffline(tabs);
       
       // Show notification about fallback
       chrome.notifications.create({
