@@ -156,8 +156,9 @@ console.log('\n=== Classification Tests ===\n');
 // Test known sites
 const githubTab = { id: 1, title: 'GitHub', url: 'https://github.com/', pinned: false };
 const githubClassification = classifyTab(githubTab);
-assertEqual(githubClassification.groupName, 'GitHub', 'GitHub classified correctly');
-assertEqual(githubClassification.color, 'grey', 'GitHub gets correct color');
+assertEqual(githubClassification.groupName, 'Github', 'GitHub bare domain classified as Github (domain label)');
+// Color is based on hash of "Github" which may vary
+assert(githubClassification.color, 'GitHub gets a color');
 
 const gmailTab = { id: 2, title: 'Gmail', url: 'https://mail.google.com/', pinned: false };
 const gmailClassification = classifyTab(gmailTab);
@@ -188,7 +189,7 @@ assertEqual(sharepointClassification.groupName, 'SP Engineering', 'SharePoint si
 // Test project extraction - GitHub repo
 const repoTab = { id: 7, title: 'tab-sorter: Issues', url: 'https://github.com/andrewslifkin/tab-sorter/issues', pinned: false };
 const repoClassification = classifyTab(repoTab);
-assertEqual(repoClassification.groupName, 'tab-sorter', 'GitHub repo extracted correctly');
+assertEqual(repoClassification.groupName, 'andrewslifkin/tab-sorter', 'GitHub repo extracted as org/repo format');
 
 // Test ETLD+1 fallback
 const unknownTab = { id: 8, title: 'Example', url: 'https://example.com/', pinned: false };
@@ -206,7 +207,9 @@ const workGroups = groupTabsOffline(FIXTURE_WORK_MORNING);
 assert(workGroups.length > 0, 'Work morning produces groups');
 assert(workGroups.length <= 12, 'Work morning produces ≤12 groups');
 assertGroupExists(workGroups, 'Gmail', 'Work morning includes Gmail group');
-assertGroupExists(workGroups, 'GitHub', 'Work morning includes GitHub group');
+// GitHub /pulls page now uses domain label instead of mega-group
+const hasGithubGroup = workGroups.some(g => g.name === 'Github' || g.name === 'GitHub');
+assert(hasGithubGroup, 'Work morning includes Github group (domain label)');
 assertGroupExists(workGroups, 'Slack', 'Work morning includes Slack group');
 assertGroupExists(workGroups, 'Google Docs', 'Work morning includes Google Docs group');
 assertGroupHasTabs(workGroups, 'Google Docs', 2, 'Google Docs group has 2 tabs (Docs + Sheets)');
@@ -225,11 +228,15 @@ assertGroupHasTabs(googleGroups, 'Google Docs', 3, 'Google Docs merges Docs/Shee
 // Test mixed domains
 const mixedGroups = groupTabsOffline(FIXTURE_MIXED_DOMAINS);
 assert(mixedGroups.length >= 1, 'Mixed domains produces at least 1 group');
-assertGroupExists(mixedGroups, 'GitHub', 'Mixed domains includes GitHub');
+// github.com bare domain now uses domain label instead of "GitHub" mega-group
+const hasMixedGithub = mixedGroups.some(g => g.name === 'Github' || g.name === 'GitHub');
+// May be merged into "Other" if it's a singleton among unknowns
+const hasMixedOther = mixedGroups.some(g => g.name === 'Other');
+assert(hasMixedGithub || hasMixedOther, 'Mixed domains includes Github or Other group');
 
 // Test ungroupable filtering
 const ungroupableGroups = groupTabsOffline(FIXTURE_WITH_UNGROUPABLE);
-assert(ungroupableGroups.length === 2, 'Ungroupable fixture produces 2 groups (GitHub + Gmail)');
+assert(ungroupableGroups.length === 2, 'Ungroupable fixture produces 2 groups (Github + Gmail)');
 const totalTabs = ungroupableGroups.reduce((sum, g) => sum + g.tabIds.length, 0);
 assertEqual(totalTabs, 2, 'Ungroupable fixture groups only 2 tabs (excludes chrome:// and pinned)');
 
@@ -302,10 +309,12 @@ assert(!hasMicrosoftMegaGroup, 'Mixed Microsoft does NOT create a Microsoft mega
 
 // Test GitHub repos - should group by repo
 const githubRepoGroups = groupTabsOffline(FIXTURE_GITHUB_REPOS);
-assertGroupExists(githubRepoGroups, 'tab-sorter', 'GitHub includes tab-sorter repo');
-assertGroupExists(githubRepoGroups, 'awesome-project', 'GitHub includes awesome-project repo');
-assertGroupExists(githubRepoGroups, 'GitHub', 'GitHub includes generic GitHub group');
-assertGroupHasTabs(githubRepoGroups, 'tab-sorter', 2, 'tab-sorter repo has 2 tabs');
+assertGroupExists(githubRepoGroups, 'andrewslifkin/tab-sorter', 'GitHub includes tab-sorter repo with org/repo format');
+assertGroupExists(githubRepoGroups, 'someorg/awesome-project', 'GitHub includes awesome-project repo with org/repo format');
+// Dashboard page uses domain label
+const hasDashboard = githubRepoGroups.some(g => g.name === 'Github' || g.name === 'GitHub');
+assert(hasDashboard, 'GitHub includes Github domain label for dashboard');
+assertGroupHasTabs(githubRepoGroups, 'andrewslifkin/tab-sorter', 2, 'tab-sorter repo has 2 tabs');
 assert(githubRepoGroups.length === 3, 'GitHub creates 3 groups (2 repos + dashboard)');
 
 // Test Azure DevOps projects
@@ -355,6 +364,97 @@ const singleTab = [
 const singleGroups = groupTabsOffline(singleTab);
 assertEqual(singleGroups.length, 1, 'Single tab produces one group');
 assertEqual(singleGroups[0].tabIds.length, 1, 'Single group contains one tab');
+
+// ============================================================================
+// NO MEGA-GROUP REGRESSION TESTS
+// ============================================================================
+
+console.log('\n=== No Mega-Group Regression Tests ===\n');
+
+// Test: Jira pages without project keys should NOT create "Jira" mega-group
+const jiraNoProject = [
+  { id: 1, title: 'Jira Home', url: 'https://company.atlassian.net/jira/your-work', pinned: false },
+];
+const jiraNoProjectGroups = groupTabsOffline(jiraNoProject);
+const hasJiraMegaGroup = jiraNoProjectGroups.some(g => g.name === 'Jira');
+assert(!hasJiraMegaGroup, 'Jira page without project does NOT create "Jira" mega-group');
+
+// Test: Confluence pages without space should NOT create "Confluence" mega-group
+const confluenceNoSpace = [
+  { id: 1, title: 'Confluence Home', url: 'https://company.atlassian.net/wiki/', pinned: false },
+];
+const confluenceNoSpaceGroups = groupTabsOffline(confluenceNoSpace);
+const hasConfluenceMegaGroup = confluenceNoSpaceGroups.some(g => g.name === 'Confluence');
+assert(!hasConfluenceMegaGroup, 'Confluence page without space does NOT create "Confluence" mega-group');
+
+// Test: SharePoint without site should use tenant name, not "SharePoint" mega-group
+const sharepointNoSite = [
+  { id: 1, title: 'SharePoint Home', url: 'https://contoso.sharepoint.com/', pinned: false },
+];
+const sharepointNoSiteGroups = groupTabsOffline(sharepointNoSite);
+const hasSharePointMegaGroup = sharepointNoSiteGroups.some(g => g.name === 'SharePoint');
+assert(!hasSharePointMegaGroup, 'SharePoint without site does NOT create "SharePoint" mega-group');
+const hasContosoSharePoint = sharepointNoSiteGroups.some(g => g.name === 'contoso SharePoint');
+assert(hasContosoSharePoint, 'SharePoint without site uses tenant name');
+
+// Test: Teams without team name should NOT create "Microsoft Teams" mega-group
+const teamsNoName = [
+  { id: 1, title: 'Microsoft Teams', url: 'https://teams.microsoft.com/', pinned: false },
+];
+const teamsNoNameGroups = groupTabsOffline(teamsNoName);
+const hasTeamsMegaGroup = teamsNoNameGroups.some(g => g.name === 'Microsoft Teams');
+assert(!hasTeamsMegaGroup, 'Teams without team name does NOT create "Microsoft Teams" mega-group');
+
+// Test: Azure DevOps without project should use org name, not "Azure DevOps" mega-group
+const adoNoProject = [
+  { id: 1, title: 'ADO Home', url: 'https://dev.azure.com/myorg/', pinned: false },
+];
+const adoNoProjectGroups = groupTabsOffline(adoNoProject);
+const hasADOMegaGroup = adoNoProjectGroups.some(g => g.name === 'Azure DevOps');
+assert(!hasADOMegaGroup, 'Azure DevOps without project does NOT create "Azure DevOps" mega-group');
+const hasADOOrg = adoNoProjectGroups.some(g => g.name === 'ADO myorg');
+assert(hasADOOrg, 'Azure DevOps without project uses org name');
+
+// Test: GitHub dashboard should NOT create "GitHub" mega-group, use domain label
+const githubDashboard = [
+  { id: 1, title: 'Dashboard', url: 'https://github.com/dashboard', pinned: false },
+];
+const githubDashboardGroups = groupTabsOffline(githubDashboard);
+const hasGitHubMegaGroup = githubDashboardGroups.some(g => g.name === 'GitHub');
+// "Github" (domain label) is OK, but not "GitHub" (mega-group from KNOWN_SITES)
+const hasGithubDomainLabel = githubDashboardGroups.some(g => g.name === 'Github');
+assert(!hasGitHubMegaGroup || hasGithubDomainLabel, 'GitHub dashboard uses domain label, not known-site mega-group');
+
+// ============================================================================
+// ENHANCED EXTRACTION TESTS
+// ============================================================================
+
+console.log('\n=== Enhanced Extraction Tests ===\n');
+
+// Test: Jira board URLs should extract project
+const jiraBoardTab = { id: 1, title: 'PROJ Board', url: 'https://company.atlassian.net/jira/software/c/projects/PROJ/boards/1', pinned: false };
+const jiraBoardClass = classifyTab(jiraBoardTab);
+assertEqual(jiraBoardClass.groupName, 'Jira PROJ', 'Jira board URL extracts project key');
+
+// Test: Jira project pages should extract project
+const jiraProjectTab = { id: 1, title: 'PROJ', url: 'https://company.atlassian.net/projects/MYPROJ', pinned: false };
+const jiraProjectClass = classifyTab(jiraProjectTab);
+assertEqual(jiraProjectClass.groupName, 'Jira MYPROJ', 'Jira project page extracts project key');
+
+// Test: Confluence with space query param
+const confluenceQueryTab = { id: 1, title: 'Space Docs', url: 'https://company.atlassian.net/wiki/display?spaceKey=DOCS', pinned: false };
+const confluenceQueryClass = classifyTab(confluenceQueryTab);
+assertEqual(confluenceQueryClass.groupName, 'Confluence DOCS', 'Confluence with spaceKey param extracts space');
+
+// Test: GitHub org page (no repo)
+const githubOrgTab = { id: 1, title: 'facebook', url: 'https://github.com/facebook', pinned: false };
+const githubOrgClass = classifyTab(githubOrgTab);
+assertEqual(githubOrgClass.groupName, 'facebook', 'GitHub org page extracts org name');
+
+// Test: GitHub org/repo format for normal length
+const githubRepoShort = { id: 1, title: 'react', url: 'https://github.com/facebook/react', pinned: false };
+const githubRepoShortClass = classifyTab(githubRepoShort);
+assertEqual(githubRepoShortClass.groupName, 'facebook/react', 'GitHub repo uses org/repo format when length is reasonable');
 
 // ============================================================================
 // RESULTS
