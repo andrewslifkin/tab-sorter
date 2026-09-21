@@ -113,20 +113,28 @@ async function organizeTabs() {
     }
   }
   
+  // Get the list of group IDs created by this extension
+  const storage = await chrome.storage.session.get(['createdGroupIds']);
+  const createdGroupIds = new Set(storage.createdGroupIds || []);
+  
   // Get existing tab groups in this window
   const existingGroups = await chrome.tabGroups.query({ windowId: currentWindow.id });
   
-  // Ungroup all tabs that were in groups created by this extension
-  // (We'll track groups by storing group IDs, but for simplicity, just ungroup all for now)
+  // Only ungroup tabs from groups created by this extension, plus currently ungrouped tabs
   for (const group of existingGroups) {
-    const groupTabs = await chrome.tabs.query({ groupId: group.id });
-    for (const tab of groupTabs) {
-      await chrome.tabs.ungroup(tab.id);
+    if (createdGroupIds.has(group.id)) {
+      const groupTabs = await chrome.tabs.query({ groupId: group.id });
+      for (const tab of groupTabs) {
+        await chrome.tabs.ungroup(tab.id);
+      }
     }
   }
   
   // Chrome's available tab group colors
   const availableColors = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'];
+  
+  // Track new group IDs we create
+  const newCreatedGroupIds = [];
   
   // Create new groups
   for (let i = 0; i < groups.length; i++) {
@@ -147,6 +155,9 @@ async function organizeTabs() {
       createProperties: { windowId: currentWindow.id }
     });
     
+    // Track this group ID
+    newCreatedGroupIds.push(groupId);
+    
     // Update group with title and color
     const color = group.color && availableColors.includes(group.color) 
       ? group.color 
@@ -158,6 +169,9 @@ async function organizeTabs() {
       collapsed: false
     });
   }
+  
+  // Store the new list of created group IDs
+  await chrome.storage.session.set({ createdGroupIds: newCreatedGroupIds });
 }
 
 async function getAIGroupings(provider, apiKey, tabData) {
