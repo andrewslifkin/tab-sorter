@@ -148,6 +148,53 @@ const FIXTURE_AZURE_DEVOPS = [
 ];
 
 // ============================================================================
+// NEW EXTRACTOR FIXTURES (Figma, X/Twitter, Slack, Linear, Notion)
+// ============================================================================
+
+const FIXTURE_FIGMA_FILES = [
+  { id: 1, title: 'Design System - Figma', url: 'https://www.figma.com/design/abc123xyz456/Design-System', pinned: false },
+  { id: 2, title: 'Design System Components - Figma', url: 'https://www.figma.com/design/abc123xyz456/Design-System?node-id=5-3', pinned: false },
+  { id: 3, title: 'Mobile App Mockups - Figma', url: 'https://figma.com/file/def789ghi012/Mobile-App-Mockups', pinned: false },
+  { id: 4, title: 'Marketing Landing Page - Figma', url: 'https://www.figma.com/design/jkl345mno678/Marketing-Landing-Page', pinned: false },
+  { id: 5, title: 'Brainstorm Board - FigJam', url: 'https://www.figma.com/board/pqr901stu234/Brainstorm-Board', pinned: false },
+];
+
+const FIXTURE_X_TWITTER_MIXED = [
+  { id: 1, title: 'Elon Musk (@elonmusk) / X', url: 'https://x.com/elonmusk', pinned: false },
+  { id: 2, title: 'Elon Musk on X', url: 'https://x.com/elonmusk/status/1234567890', pinned: false },
+  { id: 3, title: 'NASA (@NASA) / X', url: 'https://twitter.com/NASA', pinned: false },
+  { id: 4, title: 'NASA on X', url: 'https://twitter.com/NASA/status/9876543210', pinned: false },
+  { id: 5, title: 'Tech News List / X', url: 'https://x.com/i/lists/123456789', pinned: false },
+  { id: 6, title: 'AI News List / X', url: 'https://x.com/i/lists/987654321', pinned: false },
+  { id: 7, title: 'Search: ChatGPT - X', url: 'https://x.com/search?q=ChatGPT&f=live', pinned: false },
+  { id: 8, title: '#AI / X', url: 'https://x.com/hashtag/AI', pinned: false },
+];
+
+const FIXTURE_SLACK_WORKSPACES = [
+  { id: 1, title: 'engineering | Acme Corp | Slack', url: 'https://app.slack.com/client/T012ABC345/C067DEF890', pinned: false },
+  { id: 2, title: 'engineering | Acme Corp | Slack', url: 'https://app.slack.com/client/T012ABC345/C067DEF890/p1234567890', pinned: false },
+  { id: 3, title: 'general | Acme Corp | Slack', url: 'https://app.slack.com/client/T012ABC345/C123GHI456', pinned: false },
+  { id: 4, title: 'general | Acme Corp | Slack', url: 'https://app.slack.com/client/T012ABC345/C123GHI456/p9876543210', pinned: false },
+  { id: 5, title: 'Product Team | Slack', url: 'https://app.slack.com/client/T456STU789', pinned: false },
+];
+
+const FIXTURE_LINEAR_TEAMS = [
+  { id: 1, title: '[ENG-123] Implement feature', url: 'https://linear.app/acme/issue/ENG-123/implement-feature', pinned: false },
+  { id: 2, title: '[ENG-456] Fix bug', url: 'https://linear.app/acme/issue/ENG-456/fix-bug', pinned: false },
+  { id: 3, title: '[DESIGN-789] Update mockups', url: 'https://linear.app/acme/issue/DESIGN-789/update-mockups', pinned: false },
+  { id: 4, title: '[DESIGN-101] Review prototypes', url: 'https://linear.app/acme/issue/DESIGN-101/review-prototypes', pinned: false },
+  { id: 5, title: 'API Redesign Project', url: 'https://linear.app/acme/project/api-redesign-abc123', pinned: false },
+];
+
+const FIXTURE_NOTION_PAGES = [
+  { id: 1, title: 'Engineering Wiki - Notion', url: 'https://www.notion.so/acme/Engineering-Wiki-abc123def456789012345678901234ab', pinned: false },
+  { id: 2, title: 'Onboarding Guide - Notion', url: 'https://www.notion.so/acme/Onboarding-Guide-def456abc789012345678901234567cd', pinned: false },
+  { id: 3, title: 'Product Roadmap - Notion', url: 'https://app.notion.com/p/Product-Roadmap-123456789abcdef0123456789abcdef0', pinned: false },
+  { id: 4, title: 'Design System Docs - Notion', url: 'https://app.notion.com/p/Design-System-Docs-fedcba9876543210fedcba9876543210', pinned: false },
+  { id: 5, title: 'Marketing Site', url: 'https://marketing.notion.site/Home-page', pinned: false },
+];
+
+// ============================================================================
 // CLASSIFICATION TESTS
 // ============================================================================
 
@@ -458,6 +505,87 @@ const githubRepoShortClass = classifyTab(githubRepoShort);
 assertEqual(githubRepoShortClass.groupName, 'facebook/react', 'GitHub repo uses org/repo format when length is reasonable');
 
 // ============================================================================
+// NEW EXTRACTOR CLASSIFICATION TESTS
+// ============================================================================
+
+console.log('\n=== New Extractor Classification Tests ===\n');
+
+// Test: Figma file extraction
+const figmaTab = { id: 1, title: 'Design System - Figma', url: 'https://www.figma.com/design/abc123xyz456/Design-System', pinned: false };
+const figmaClass = classifyTab(figmaTab);
+assertEqual(figmaClass.groupName, 'Figma Design System', 'Figma file extracts file name correctly');
+assertEqual(figmaClass.color, 'pink', 'Figma gets correct color');
+
+// Test: Figma without file name falls back to type
+const figmaNoName = { id: 1, title: 'Figma Board', url: 'https://figma.com/board/abc123xyz456', pinned: false };
+const figmaNoNameClass = classifyTab(figmaNoName);
+assertEqual(figmaNoNameClass.groupName, 'Figma Board', 'Figma without name uses file type');
+
+// Test: X/Twitter profile extraction
+const xProfileTab = { id: 1, title: 'Elon Musk (@elonmusk) / X', url: 'https://x.com/elonmusk', pinned: false };
+const xProfileClass = classifyTab(xProfileTab);
+assertEqual(xProfileClass.groupName, '@elonmusk', 'X profile extracts handle correctly');
+assertEqual(xProfileClass.color, 'grey', 'X gets correct color');
+
+// Test: X/Twitter status with handle
+const xStatusTab = { id: 1, title: 'NASA on X', url: 'https://x.com/NASA/status/1234567890', pinned: false };
+const xStatusClass = classifyTab(xStatusTab);
+assertEqual(xStatusClass.groupName, '@NASA', 'X status with handle extracts handle');
+
+// Test: X/Twitter list
+const xListTab = { id: 1, title: 'Tech News / X', url: 'https://x.com/i/lists/123456789', pinned: false };
+const xListClass = classifyTab(xListTab);
+assert(xListClass.groupName.includes('List'), 'X list creates list group');
+
+// Test: X/Twitter search
+const xSearchTab = { id: 1, title: 'Search: AI - X', url: 'https://x.com/search?q=artificial+intelligence', pinned: false };
+const xSearchClass = classifyTab(xSearchTab);
+assert(xSearchClass.groupName.includes('X'), 'X search creates search group');
+
+// Test: X/Twitter hashtag
+const xHashtagTab = { id: 1, title: '#AI / X', url: 'https://x.com/hashtag/AI', pinned: false };
+const xHashtagClass = classifyTab(xHashtagTab);
+assertEqual(xHashtagClass.groupName, '#AI', 'X hashtag extracts hashtag correctly');
+
+// Test: Slack channel extraction
+const slackChannelTab = { id: 1, title: 'engineering | Acme Corp | Slack', url: 'https://app.slack.com/client/T012ABC345/C067DEF890', pinned: false };
+const slackChannelClass = classifyTab(slackChannelTab);
+assertEqual(slackChannelClass.groupName, 'Slack engineering', 'Slack extracts channel name from title');
+assertEqual(slackChannelClass.color, 'purple', 'Slack gets correct color');
+
+// Test: Slack workspace only
+const slackWorkspaceTab = { id: 1, title: 'Acme Corp | Slack', url: 'https://app.slack.com/client/T012ABC345', pinned: false };
+const slackWorkspaceClass = classifyTab(slackWorkspaceTab);
+assertEqual(slackWorkspaceClass.groupName, 'Slack Acme Corp', 'Slack extracts workspace name from title');
+
+// Test: Linear issue extraction
+const linearIssueTab = { id: 1, title: '[ENG-123] Implement feature', url: 'https://linear.app/acme/issue/ENG-123/implement-feature', pinned: false };
+const linearIssueClass = classifyTab(linearIssueTab);
+assertEqual(linearIssueClass.groupName, 'Linear ENG', 'Linear issue extracts team key correctly');
+assertEqual(linearIssueClass.color, 'purple', 'Linear gets correct color');
+
+// Test: Linear project extraction
+const linearProjectTab = { id: 1, title: 'API Redesign', url: 'https://linear.app/acme/project/api-redesign-abc123', pinned: false };
+const linearProjectClass = classifyTab(linearProjectTab);
+assertEqual(linearProjectClass.groupName, 'Linear Api Redesign', 'Linear project extracts project name');
+
+// Test: Notion workspace extraction (old format)
+const notionOldTab = { id: 1, title: 'Engineering Wiki - Notion', url: 'https://www.notion.so/acme/Engineering-Wiki-abc123def456789012345678901234ab', pinned: false };
+const notionOldClass = classifyTab(notionOldTab);
+assertEqual(notionOldClass.groupName, 'Notion acme', 'Notion old format extracts workspace name');
+assertEqual(notionOldClass.color, 'grey', 'Notion gets correct color');
+
+// Test: Notion page extraction (new format)
+const notionNewTab = { id: 1, title: 'Product Roadmap - Notion', url: 'https://app.notion.com/p/Product-Roadmap-123456789abcdef0123456789abcdef0', pinned: false };
+const notionNewClass = classifyTab(notionNewTab);
+assertEqual(notionNewClass.groupName, 'Notion Product Roadmap', 'Notion new format extracts page title');
+
+// Test: Notion custom site
+const notionSiteTab = { id: 1, title: 'Marketing Home', url: 'https://marketing.notion.site/Home-page', pinned: false };
+const notionSiteClass = classifyTab(notionSiteTab);
+assertEqual(notionSiteClass.groupName, 'Notion marketing', 'Notion custom site extracts subdomain');
+
+// ============================================================================
 // SINGLETON FILTERING TESTS (NEW HARD RULE)
 // ============================================================================
 
@@ -534,6 +662,112 @@ assertGroupExists(multiGroups, 'Google Docs', 'Multi-tab Google Docs group creat
 assertGroupHasTabs(multiGroups, 'Gmail', 2, 'Gmail has 2 tabs');
 assertGroupHasTabs(multiGroups, 'Google Docs', 3, 'Google Docs has 3 tabs (Docs + Sheets)');
 assert(multiGroups.length >= 2, 'Multi-tab groups work correctly');
+
+// ============================================================================
+// NEW EXTRACTOR GROUPING TESTS
+// ============================================================================
+
+console.log('\n=== New Extractor Grouping Tests ===\n');
+
+// Test: Figma files - group by file, not one mega "Figma"
+const figmaGroups = groupTabsOffline(FIXTURE_FIGMA_FILES);
+assertGroupExists(figmaGroups, 'Figma Design System', 'Figma includes Design System file group');
+assertGroupHasTabs(figmaGroups, 'Figma Design System', 2, 'Figma Design System has 2 tabs');
+// Mobile App, Marketing Landing, and Brainstorm are singletons and should be dropped
+assertEqual(figmaGroups.length, 1, 'Figma creates 1 group (other files are singletons)');
+const hasFigmaMegaGroup = figmaGroups.some(g => g.name === 'Figma' && g.tabIds.length > 2);
+assert(!hasFigmaMegaGroup, 'Figma does NOT create a mega-group');
+
+// Test: X/Twitter mixed - group by profile/list/search, not one mega "Twitter"/"X"
+const xGroups = groupTabsOffline(FIXTURE_X_TWITTER_MIXED);
+assertGroupExists(xGroups, '@elonmusk', 'X includes @elonmusk profile group');
+assertGroupExists(xGroups, '@NASA', 'X includes @NASA profile group');
+assertGroupHasTabs(xGroups, '@elonmusk', 2, '@elonmusk has 2 tabs (profile + status)');
+assertGroupHasTabs(xGroups, '@NASA', 2, '@NASA has 2 tabs (profile + status)');
+// Lists, search, and hashtag are singletons and should be dropped
+const hasXMegaGroup = xGroups.some(g => (g.name === 'Twitter' || g.name === 'X') && g.tabIds.length > 2);
+assert(!hasXMegaGroup, 'X does NOT create a "Twitter" or "X" mega-group');
+// Check that lists group exists if there are 2+ list tabs
+const listGroup = xGroups.find(g => g.name.includes('List'));
+if (listGroup) {
+  assertGroupHasTabs(xGroups, listGroup.name, 2, 'X Lists group has 2 tabs');
+}
+
+// Test: Slack workspaces - group by channel/workspace, not one mega "Slack"
+const slackGroups = groupTabsOffline(FIXTURE_SLACK_WORKSPACES);
+// engineering and general are from Acme Corp, design and random from Design Co
+assertGroupExists(slackGroups, 'Slack engineering', 'Slack includes engineering channel');
+assertGroupExists(slackGroups, 'Slack general', 'Slack includes general channel');
+// Product Team workspace is a singleton and should be dropped
+const hasSlackMegaGroup = slackGroups.some(g => g.name === 'Slack' && g.tabIds.length > 2);
+assert(!hasSlackMegaGroup, 'Slack does NOT create a mega-group');
+assertEqual(slackGroups.length, 2, 'Slack creates 2 groups (engineering and general, others dropped)');
+
+// Test: Linear teams - group by team/project, not one mega "Linear"
+const linearGroups = groupTabsOffline(FIXTURE_LINEAR_TEAMS);
+assertGroupExists(linearGroups, 'Linear ENG', 'Linear includes ENG team');
+assertGroupExists(linearGroups, 'Linear DESIGN', 'Linear includes DESIGN team');
+assertGroupHasTabs(linearGroups, 'Linear ENG', 2, 'Linear ENG has 2 issues');
+assertGroupHasTabs(linearGroups, 'Linear DESIGN', 2, 'Linear DESIGN has 2 issues');
+// API Redesign project is a singleton and should be dropped
+const hasLinearMegaGroup = linearGroups.some(g => g.name === 'Linear' && g.tabIds.length > 2);
+assert(!hasLinearMegaGroup, 'Linear does NOT create a mega-group');
+assertEqual(linearGroups.length, 2, 'Linear creates 2 groups (ENG and DESIGN teams)');
+
+// Test: Notion pages - group by workspace/page, not one mega "Notion"
+const notionGroups = groupTabsOffline(FIXTURE_NOTION_PAGES);
+assertGroupExists(notionGroups, 'Notion acme', 'Notion includes acme workspace');
+assertGroupHasTabs(notionGroups, 'Notion acme', 2, 'Notion acme workspace has 2 pages');
+// Product Roadmap, Design System, and Marketing site are singletons and should be dropped
+const hasNotionMegaGroup = notionGroups.some(g => g.name === 'Notion' && g.tabIds.length > 2);
+assert(!hasNotionMegaGroup, 'Notion does NOT create a mega-group');
+assertEqual(notionGroups.length, 1, 'Notion creates 1 group (acme workspace)');
+
+// ============================================================================
+// NO MEGA-GROUP REGRESSION TESTS FOR NEW EXTRACTORS
+// ============================================================================
+
+console.log('\n=== New Extractor No Mega-Group Regression Tests ===\n');
+
+// Test: Figma home page without file should NOT create "Figma" mega-group
+const figmaNoFile = [
+  { id: 1, title: 'Figma - Recent files', url: 'https://www.figma.com/files/recent', pinned: false },
+];
+const figmaNoFileGroups = groupTabsOffline(figmaNoFile);
+const hasFigmaNoFileMegaGroup = figmaNoFileGroups.some(g => g.name === 'Figma');
+assert(!hasFigmaNoFileMegaGroup, 'Figma page without file does NOT create "Figma" mega-group');
+
+// Test: X home timeline should NOT create "Twitter"/"X" mega-group
+const xHome = [
+  { id: 1, title: 'Home / X', url: 'https://x.com/home', pinned: false },
+];
+const xHomeGroups = groupTabsOffline(xHome);
+const hasXHomeMegaGroup = xHomeGroups.some(g => g.name === 'Twitter' || g.name === 'X');
+assert(!hasXHomeMegaGroup, 'X home page does NOT create "Twitter" or "X" mega-group');
+
+// Test: Slack without workspace/channel should NOT create "Slack" mega-group
+const slackNoWorkspace = [
+  { id: 1, title: 'Slack', url: 'https://slack.com/', pinned: false },
+];
+const slackNoWorkspaceGroups = groupTabsOffline(slackNoWorkspace);
+const hasSlackNoWorkspaceMegaGroup = slackNoWorkspaceGroups.some(g => g.name === 'Slack');
+assert(!hasSlackNoWorkspaceMegaGroup, 'Slack page without workspace does NOT create "Slack" mega-group');
+
+// Test: Linear without team/project should NOT create "Linear" mega-group
+const linearNoTeam = [
+  { id: 1, title: 'Linear - Issues', url: 'https://linear.app/acme', pinned: false },
+];
+const linearNoTeamGroups = groupTabsOffline(linearNoTeam);
+const hasLinearNoTeamMegaGroup = linearNoTeamGroups.some(g => g.name === 'Linear');
+assert(!hasLinearNoTeamMegaGroup, 'Linear page without team does NOT create "Linear" mega-group');
+
+// Test: Notion without workspace/page should NOT create "Notion" mega-group
+const notionNoWorkspace = [
+  { id: 1, title: 'Notion - Home', url: 'https://www.notion.so/', pinned: false },
+];
+const notionNoWorkspaceGroups = groupTabsOffline(notionNoWorkspace);
+const hasNotionNoWorkspaceMegaGroup = notionNoWorkspaceGroups.some(g => g.name === 'Notion');
+assert(!hasNotionNoWorkspaceMegaGroup, 'Notion page without workspace does NOT create "Notion" mega-group');
 
 // ============================================================================
 // RESULTS
