@@ -6,8 +6,10 @@ Chrome Manifest V3 extension that organizes open tabs into native Chrome tab gro
 
 - 🎯 **One-click organization**: Click the toolbar icon to instantly organize all tabs in the current window
 - 🤖 **AI-powered grouping**: Uses LLMs to intelligently categorize tabs by content
+- 🌐 **Offline mode**: Rules-based grouping works without AI APIs (perfect for corporate networks)
 - 🎨 **Native Chrome tab groups**: Creates colored, titled tab groups directly in Chrome's tab bar
-- 🔌 **Multiple AI providers**: Supports OpenAI, Anthropic Claude, and Google Gemini
+- 🔌 **Multiple AI providers**: Supports OpenAI, Anthropic Claude, Google Gemini, and Offline
+- 🔄 **Automatic fallback**: Falls back to offline mode if AI APIs are blocked
 - 🔒 **Privacy-focused**: API keys stored locally, only tab titles and hostnames are sent to AI
 
 ## Installation
@@ -37,24 +39,50 @@ Chrome Manifest V3 extension that organizes open tabs into native Chrome tab gro
 
 ## Setup
 
-### Configure API Key
+### Configure Provider
 
 1. **Click the extension icon** or go to `chrome://extensions/` and click "Details" → "Extension options"
 
-2. **Choose your AI provider**:
+2. **Choose your provider**:
    - **OpenAI** (default): Fast and reliable with GPT-4o Mini
    - **Anthropic**: Uses Claude 3 Haiku
    - **Google Gemini**: Uses Gemini 1.5 Flash
+   - **Offline**: Rules-based grouping without AI APIs (no internet required)
 
-3. **Get an API key**:
+3. **For AI providers, get an API key**:
    - **OpenAI**: Visit [OpenAI Platform](https://platform.openai.com/api-keys)
    - **Anthropic**: Visit [Anthropic Console](https://console.anthropic.com/settings/keys)
    - **Google Gemini**: Visit [Google AI Studio](https://aistudio.google.com/app/apikey)
 
-4. **Enter your API key** in the options page and click "Save Settings"
+4. **Enter your API key** (if using AI provider) and click "Save Settings"
 
 ⚠️ **Security Note**: API keys are stored in Chrome's sync storage. Never share your extension data or API keys.
 
+### Offline Mode (No API Required)
+
+**Perfect for corporate/MDM-managed machines that block AI APIs!**
+
+Offline mode uses a comprehensive rules-based engine that:
+- ✅ **Project-over-vendor grouping**: Jira tabs group by project key (PROOF, MARKET), not all into "Jira"
+- ✅ **Subject extraction**: SharePoint by site, Teams by team, Confluence by space, GitHub by repo
+- ✅ Recognizes 100+ popular services (Google Workspace, Slack, Figma, AWS, etc.)
+- ✅ Groups related subdomains when no project signal (all Google Docs tabs together)
+- ✅ Uses smart heuristics for unknown sites
+- ✅ Creates 3-12 logical groups with stable names and colors
+- ✅ Works instantly without network calls
+- ✅ Deterministic results (same tabs → same groups)
+
+**Project/Subject Extraction Examples:**
+- **Jira**: `PROOF-123`, `MARKET-456` → separate "Jira PROOF" and "Jira MARKET" groups (not one "Jira" mega-group)
+- **Confluence**: `/wiki/spaces/ENG`, `/wiki/spaces/PROD` → "Confluence ENG", "Confluence PROD"
+- **SharePoint**: `/sites/engineering`, `/sites/marketing` → "SP Engineering", "SP Marketing"
+- **Microsoft Teams**: "Engineering Team | Microsoft Teams" → "Teams Engineering Team"
+- **Azure DevOps**: `/company/project-alpha` → "ADO Project Alpha"
+- **GitHub**: `github.com/org/repo` → groups by repo name
+
+**To use offline mode**: Select "Offline" in the options page. No API key needed.
+
+**Auto-fallback**: If you use an AI provider and it fails (network error, blocked by firewall, etc.), the extension automatically falls back to offline grouping and shows a notification: "Offline grouping (API unavailable)".
 ## Usage
 
 1. **Open multiple tabs** in a Chrome window with various content (e.g., news, social media, documentation, shopping)
@@ -80,66 +108,130 @@ Chrome Manifest V3 extension that organizes open tabs into native Chrome tab gro
 - ❌ Pinned tabs are left unchanged
 
 ### Grouping Logic
+
+**AI Mode (OpenAI/Anthropic/Gemini)**:
+- The AI analyzes tab titles and hostnames (not full page content)
+- Generates logical category names and assigns colors
+- Groups are typically 2-8 categories depending on tab diversity
+
+**Offline Mode**:
+- Uses layered classification (see offline-grouping.js for details):
+  1. **Project/subject extraction** (highest priority): Jira project keys, Confluence spaces, SharePoint sites, Teams channels, Azure DevOps projects, GitHub repos — avoids vendor mega-groups
+  2. Known site map: 100+ curated services with preset group names
+  3. Hostname family merging: related subdomains grouped together (fallback when no project signal)
+  4. Title keyword hints: PR, standup, invoice keywords inform grouping
+  5. ETLD+1 fallback: unknown sites clustered by domain
+  6. Smart sizing: merges tiny groups, caps at 12, handles singletons intelligently
+- **Prefers project over vendor**: Multiple Jira projects → separate "Jira PROOF", "Jira MARKET" groups (not one "Atlassian" mega-group)
+- Stable, deterministic results
+- No network required
+
+**Both modes**:
 - Existing tab groups in the window are ungrouped before reorganizing
 - The AI analyzes tab titles and hostnames (not full page content)
 - Groups are assigned colors from Chrome's available palette
 - Each group gets a short, descriptive name
 
 ### Error Handling
-- Missing API key: Shows notification with instructions
-- Network errors: Shows error badge and notification
+- Missing API key (AI mode): Shows notification with instructions
+- Network errors or blocked APIs: Automatically falls back to offline grouping
 - No groupable tabs: Shows error message
+- Offline mode: Never fails due to network issues
 
 ## API Costs
 
-This extension uses AI APIs that may incur costs:
+**Offline mode: $0** (completely free, no API calls)
+
+AI providers may incur small costs:
 
 - **OpenAI GPT-4o Mini**: ~$0.0001-0.0003 per organization (very cheap)
 - **Anthropic Claude Haiku**: ~$0.0001-0.0005 per organization
 - **Google Gemini Flash**: Free tier available, then ~$0.0001-0.0003
 
-Typical usage: organizing 20-50 tabs costs less than $0.001 (fraction of a cent).
+Typical AI usage: organizing 20-50 tabs costs less than $0.001 (fraction of a cent).
 
 ## Development
 
 ### File Structure
 ```
 tab-sorter/
-├── manifest.json           # Extension configuration
-├── background.js          # Service worker with main logic
-├── options.html          # Settings page UI
-├── options.js            # Settings page logic
-├── icons/                # Extension icons
+├── manifest.json              # Extension configuration
+├── background.js             # Service worker with main logic
+├── offline-grouping.js       # Rules-based grouping engine
+├── offline-grouping.test.js  # Unit tests for offline grouping
+├── options.html             # Settings page UI
+├── options.js               # Settings page logic
+├── icons/                   # Extension icons
 │   ├── icon16.png
 │   ├── icon48.png
 │   └── icon128.png
-├── generate_icons.py     # Icon generation script
+├── generate_icons.py        # Icon generation script
 └── README.md
 ```
 
 ### How It Works
 
+**AI Mode**:
 1. **User clicks icon** → `chrome.action.onClicked` listener fires
 2. **Collect tabs** → Query all tabs in current window, filter non-groupable
 3. **Call AI** → Send tab titles + hostnames to selected LLM provider
-4. **Parse response** → Extract JSON with group names, colors, and tab IDs
+4. **Fallback if needed** → If API call fails, automatically use offline grouping
+5. **Parse response** → Extract JSON with group names, colors, and tab IDs
+6. **Ungroup existing** → Remove existing tab groups in the window
+7. **Create groups** → Use `chrome.tabs.group` and `chrome.tabGroups.update` APIs
+8. **Show result** → Update badge to indicate success/failure
+
+**Offline Mode**:
+1. **User clicks icon** → `chrome.action.onClicked` listener fires
+2. **Collect tabs** → Query all tabs in current window, filter non-groupable
+3. **Classify tabs** → Apply rules engine:
+   - Extract project/subject context (Jira projects, SharePoint sites, Teams, etc.)
+   - Check known sites map
+   - Apply hostname family patterns (fallback)
+   - Check title keywords
+   - Domain fallback
+4. **Apply policies** → Smart group sizing, merge unknowns, handle singletons
 5. **Ungroup existing** → Remove existing tab groups in the window
 6. **Create groups** → Use `chrome.tabs.group` and `chrome.tabGroups.update` APIs
-7. **Show result** → Update badge to indicate success/failure
+7. **Show result** → Update badge to indicate success
+
+### Running Tests
+
+The offline grouping engine includes comprehensive unit tests:
+
+```bash
+node offline-grouping.test.js
+```
+
+Tests cover:
+- Classification of known sites, project extraction, and families
+- Grouping logic with real-world fixtures (work morning, multi-service, etc.)
+- Project extraction: multiple Jira projects, Confluence spaces, SharePoint sites, GitHub repos
+- No vendor mega-groups: verifies Atlassian/Microsoft tabs stay separate by project/site
+- Edge cases (empty input, only ungroupable tabs, singletons)
+- Determinism (same input always produces same output)
 
 ### Customization
 
-To modify the grouping prompt or behavior, edit `background.js`:
+**AI Mode**: Edit `background.js`:
 - Change the prompt in the `getAIGroupings()` function
 - Adjust models in the API call functions
 - Modify ungrouping behavior in `organizeTabs()`
 
+**Offline Mode**: Edit `offline-grouping.js`:
+- Modify `extractProjectContext()` to add more project/subject extraction patterns
+- Add sites to `KNOWN_SITES` map (hostname suffix → [name, color, priority])
+- Add patterns to `HOSTNAME_FAMILIES` for subdomain merging
+- Adjust title keywords in `TITLE_KEYWORDS`
+- Tune group size policy in `applyGroupSizePolicy()`
+
 ## Limitations
 
 - Only organizes tabs in the current window (not across windows)
-- Requires a valid API key and internet connection
+- AI modes require a valid API key and internet connection (but auto-fallback to offline)
 - Chrome internal pages cannot be grouped
 - Tab groups are not synced across devices (Chrome limitation)
+- Offline mode uses heuristics, not semantic understanding (may not match AI quality for ambiguous cases)
 
 ## Privacy
 
@@ -153,19 +245,26 @@ This extension:
 ## Troubleshooting
 
 ### Extension icon shows "!" badge
-- Check that your API key is correctly entered in the options page
-- Verify you have an active internet connection
+- Check that your API key is correctly entered in the options page (if using AI mode)
+- Verify you have an active internet connection (AI mode only)
+- Try switching to Offline mode if on a locked-down network
 - Check the browser console for detailed error messages (`Ctrl+Shift+J`)
 
 ### Tabs aren't being grouped
 - Make sure you have groupable tabs (not just `chrome://` pages)
-- Verify your API key is valid and has available credits
+- Verify your API key is valid and has available credits (AI mode)
 - Check that you're clicking the icon in a window with tabs
 
 ### "Missing API key" error
 - Go to the options page and enter your API key for the selected provider
+- Or switch to Offline mode (no API key required)
 - Make sure you've clicked "Save Settings"
 
+### "Offline grouping (API unavailable)" notification
+- Your AI provider failed (network blocked, rate limit, etc.)
+- The extension automatically used offline mode as fallback
+- Your tabs were still organized successfully!
+- To avoid this, select Offline as your primary provider
 ## License
 
 MIT License - feel free to modify and distribute.

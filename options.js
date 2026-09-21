@@ -47,9 +47,12 @@ async function saveSettings(e) {
   const anthropicKey = document.getElementById('anthropic-key').value.trim();
   const geminiKey = document.getElementById('gemini-key').value.trim();
   
-  // Validate that the selected provider has an API key
+  // Validate that the selected provider has an API key (except offline)
   let hasKey = false;
   switch (provider) {
+    case 'offline':
+      hasKey = true; // No API key needed for offline mode
+      break;
     case 'openai':
       hasKey = openaiKey.length > 0;
       break;

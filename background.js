@@ -1,5 +1,7 @@
 // Service worker for AI Tab Organizer
 
+// Import offline grouping module
+importScripts('offline-grouping.js');
 // Listen for extension icon click
 chrome.action.onClicked.addListener(async (tab) => {
   try {
@@ -60,32 +62,56 @@ async function organizeTabs() {
   const config = await chrome.storage.sync.get(['provider', 'openaiKey', 'anthropicKey', 'geminiKey']);
   const provider = config.provider || 'openai';
   
-  let apiKey;
-  switch (provider) {
-    case 'openai':
-      apiKey = config.openaiKey;
-      break;
-    case 'anthropic':
-      apiKey = config.anthropicKey;
-      break;
-    case 'gemini':
-      apiKey = config.geminiKey;
-      break;
+  let groups;
+  
+  // Handle offline provider
+  if (provider === 'offline') {
+    // Use offline grouping (rules-based)
+    groups = window.OfflineGrouping.groupTabsOffline(tabs);
+  } else {
+    // Try AI provider with auto-fallback to offline
+    let apiKey;
+    switch (provider) {
+      case 'openai':
+        apiKey = config.openaiKey;
+        break;
+      case 'anthropic':
+        apiKey = config.anthropicKey;
+        break;
+      case 'gemini':
+        apiKey = config.geminiKey;
+        break;
+    }
+    
+    if (!apiKey) {
+      throw new Error(`Missing API key for ${provider}. Please set it in the options page or switch to Offline mode.`);
+    }
+    
+    // Prepare tab data for AI
+    const tabData = groupableTabs.map(tab => ({
+      id: tab.id,
+      title: tab.title || 'Untitled',
+      hostname: new URL(tab.url).hostname
+    }));
+    
+    try {
+      // Try AI grouping
+      groups = await getAIGroupings(provider, apiKey, tabData);
+    } catch (error) {
+      // Auto-fallback to offline grouping
+      console.warn(`AI provider failed (${error.message}), falling back to offline grouping`);
+      
+      groups = window.OfflineGrouping.groupTabsOffline(tabs);
+      
+      // Show notification about fallback
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'icons/icon48.png',
+        title: 'AI Tab Organizer',
+        message: 'Offline grouping (API unavailable)'
+      });
+    }
   }
-  
-  if (!apiKey) {
-    throw new Error(`Missing API key for ${provider}. Please set it in the options page.`);
-  }
-  
-  // Prepare tab data for AI
-  const tabData = groupableTabs.map(tab => ({
-    id: tab.id,
-    title: tab.title || 'Untitled',
-    hostname: new URL(tab.url).hostname
-  }));
-  
-  // Get AI grouping suggestions
-  const groups = await getAIGroupings(provider, apiKey, tabData);
   
   // Get existing tab groups in this window
   const existingGroups = await chrome.tabGroups.query({ windowId: currentWindow.id });
