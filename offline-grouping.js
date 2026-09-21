@@ -59,6 +59,17 @@ function extractProjectContext(tab, url) {
       return { groupName: `Jira ${titleMatch[1]}`, color: 'blue' };
     }
     
+    // Check for Jira board or project list pages
+    const boardMatch = pathname.match(/\/jira\/software\/(?:c\/)?projects\/([A-Z][A-Z0-9]+)\/boards/);
+    if (boardMatch) {
+      return { groupName: `Jira ${boardMatch[1]}`, color: 'blue' };
+    }
+    
+    const projectMatch = pathname.match(/\/projects\/([A-Z][A-Z0-9]+)/);
+    if (projectMatch) {
+      return { groupName: `Jira ${projectMatch[1]}`, color: 'blue' };
+    }
+    
     // Confluence space detection
     if (pathname.includes('/wiki/spaces/')) {
       const spaceMatch = pathname.match(/\/wiki\/spaces\/([^\/]+)/);
@@ -68,15 +79,14 @@ function extractProjectContext(tab, url) {
       }
     }
     
-    // Fallback: check if it's clearly Jira or Confluence from path
-    if (pathname.includes('/browse/') || pathname.includes('/jira/')) {
-      return { groupName: 'Jira', color: 'blue' };
-    }
-    if (pathname.includes('/wiki/') || pathname.includes('/confluence/')) {
-      return { groupName: 'Confluence', color: 'blue' };
+    // Check URL query params for space
+    const spaceParam = searchParams.get('spaceKey') || searchParams.get('space');
+    if (spaceParam) {
+      return { groupName: `Confluence ${spaceParam.toUpperCase()}`, color: 'blue' };
     }
     
-    // No project signal, return null to fall through to vendor family
+    // No project signal found - return null instead of mega-group
+    // This lets domain/org extraction take over
     return null;
   }
   
@@ -92,7 +102,16 @@ function extractProjectContext(tab, url) {
       return { groupName: `SP ${titleCase}`, color: 'blue' };
     }
     
-    // No site path, fall through to generic SharePoint
+    // Extract tenant/org name as fallback (better than "SharePoint")
+    const tenantMatch = hostname.match(/^([^.]+)\.sharepoint\.com$/);
+    if (tenantMatch) {
+      const tenant = tenantMatch[1];
+      if (tenant && tenant !== 'sharepoint') {
+        return { groupName: `${tenant} SharePoint`, color: 'blue' };
+      }
+    }
+    
+    // No site path, return null to use domain label
     return null;
   }
   
@@ -108,8 +127,18 @@ function extractProjectContext(tab, url) {
       }
     }
     
-    // Fallback to generic Teams
-    return { groupName: 'Microsoft Teams', color: 'purple' };
+    // Try to extract from URL groupId or threadId
+    const groupId = searchParams.get('groupId');
+    if (groupId) {
+      // If we have a groupId, try to get a readable name from title
+      const cleanTitle = title.replace(/\s*\|\s*Microsoft Teams\s*$/i, '').trim();
+      if (cleanTitle && cleanTitle.length > 0 && cleanTitle.length < 50) {
+        return { groupName: `Teams ${cleanTitle}`, color: 'purple' };
+      }
+    }
+    
+    // No specific team extracted - return null instead of mega-group
+    return null;
   }
   
   // Azure DevOps
@@ -118,14 +147,24 @@ function extractProjectContext(tab, url) {
     const projectMatch = pathname.match(/\/[^\/]+\/([^\/]+)/);
     if (projectMatch) {
       const projectName = projectMatch[1].replace(/-|_/g, ' ');
-      const titleCase = projectName.split(' ').map(w => 
-        w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
-      ).join(' ');
-      return { groupName: `ADO ${titleCase}`, color: 'blue' };
+      // Skip if it's just a settings or admin page
+      if (!['_settings', '_admin', '_apis'].includes(projectMatch[1])) {
+        const titleCase = projectName.split(' ').map(w => 
+          w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
+        ).join(' ');
+        return { groupName: `ADO ${titleCase}`, color: 'blue' };
+      }
     }
     
-    // Fallback to generic Azure DevOps
-    return { groupName: 'Azure DevOps', color: 'blue' };
+    // Extract org name as fallback
+    const orgMatch = pathname.match(/^\/([^\/]+)/);
+    if (orgMatch && orgMatch[1]) {
+      const org = orgMatch[1];
+      return { groupName: `ADO ${org}`, color: 'blue' };
+    }
+    
+    // No project signal - return null instead of mega-group
+    return null;
   }
   
   // GitHub org/repo
@@ -136,17 +175,33 @@ function extractProjectContext(tab, url) {
       const org = repoMatch[1];
       const repo = repoMatch[2];
       
-      // Skip user pages, settings, etc.
-      if (['settings', 'notifications', 'pulls', 'issues', 'explore', 'dashboard'].includes(org)) {
-        return { groupName: 'GitHub', color: 'grey' };
+      // Skip user pages, settings, etc. and return null to use domain label
+      if (['settings', 'notifications', 'pulls', 'issues', 'explore', 'dashboard', 'codespaces', 'organizations'].includes(org)) {
+        return null;
       }
       
-      // Use repo name as group (shorter than org/repo)
+      // Use org/repo format if combined length is reasonable
+      const combined = `${org}/${repo}`;
+      if (combined.length <= 30) {
+        return { groupName: combined, color: 'grey' };
+      }
+      
+      // Otherwise just use repo name (with collision risk, but cleaner)
       return { groupName: repo, color: 'grey' };
     }
     
-    // Fallback to generic GitHub for dashboard/pulls/etc.
-    return { groupName: 'GitHub', color: 'grey' };
+    // For org pages without repo
+    const orgMatch = pathname.match(/^\/([^\/]+)\/?$/);
+    if (orgMatch && orgMatch[1]) {
+      const org = orgMatch[1];
+      // Skip special pages
+      if (!['settings', 'notifications', 'pulls', 'issues', 'explore', 'dashboard', 'codespaces', 'organizations'].includes(org)) {
+        return { groupName: org, color: 'grey' };
+      }
+    }
+    
+    // No org/repo context - return null instead of "GitHub" mega-group
+    return null;
   }
   
   // No project context found
@@ -180,7 +235,8 @@ const KNOWN_SITES = {
   'microsoft365.com': ['Microsoft 365', 'blue', 1],
   
   // Development & Code (GitHub handled by project extraction)
-  'gist.github.com': ['GitHub', 'grey', 1],
+  // 'github.com' entry removed - use project extraction instead
+  'gist.github.com': ['GitHub Gist', 'grey', 1],
   'gitlab.com': ['GitLab', 'orange', 1],
   'bitbucket.org': ['Bitbucket', 'blue', 1],
   'stackoverflow.com': ['Stack Overflow', 'orange', 1],
