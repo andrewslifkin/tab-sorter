@@ -46,12 +46,26 @@ async function organizeTabs() {
   // Get all tabs in current window
   const tabs = await chrome.tabs.query({ windowId: currentWindow.id });
   
-  // Filter out chrome:// and chrome-extension:// URLs as they can't be grouped
+  // Get the list of group IDs created by this extension
+  const storage = await chrome.storage.session.get(['createdGroupIds']);
+  const createdGroupIds = new Set(storage.createdGroupIds || []);
+  
+  // Filter tabs to only those we can reorganize:
+  // 1. Exclude chrome://, chrome-extension://, and pinned tabs
+  // 2. Only include ungrouped tabs OR tabs in groups we created
   const groupableTabs = tabs.filter(tab => {
     const url = tab.url || '';
-    return !url.startsWith('chrome://') && 
-           !url.startsWith('chrome-extension://') &&
-           !tab.pinned; // Skip pinned tabs
+    
+    // Skip chrome:// and chrome-extension:// URLs and pinned tabs
+    if (url.startsWith('chrome://') || 
+        url.startsWith('chrome-extension://') ||
+        tab.pinned) {
+      return false;
+    }
+    
+    // Only include ungrouped tabs or tabs in our tracked groups
+    // groupId === -1 means ungrouped
+    return tab.groupId === -1 || createdGroupIds.has(tab.groupId);
   });
   
   if (groupableTabs.length === 0) {
@@ -67,7 +81,7 @@ async function organizeTabs() {
   // Handle offline provider
   if (provider === 'offline') {
     // Use offline grouping (rules-based)
-    groups = globalThis.OfflineGrouping.groupTabsOffline(tabs);
+    groups = globalThis.OfflineGrouping.groupTabsOffline(groupableTabs);
   } else {
     // Try AI provider with auto-fallback to offline
     let apiKey;
@@ -101,7 +115,7 @@ async function organizeTabs() {
       // Auto-fallback to offline grouping
       console.warn(`AI provider failed (${error.message}), falling back to offline grouping`);
       
-      groups = globalThis.OfflineGrouping.groupTabsOffline(tabs);
+      groups = globalThis.OfflineGrouping.groupTabsOffline(groupableTabs);
       
       // Show notification about fallback
       chrome.notifications.create({
@@ -113,14 +127,10 @@ async function organizeTabs() {
     }
   }
   
-  // Get the list of group IDs created by this extension
-  const storage = await chrome.storage.session.get(['createdGroupIds']);
-  const createdGroupIds = new Set(storage.createdGroupIds || []);
-  
   // Get existing tab groups in this window
   const existingGroups = await chrome.tabGroups.query({ windowId: currentWindow.id });
   
-  // Only ungroup tabs from groups created by this extension, plus currently ungrouped tabs
+  // Only ungroup tabs from groups created by this extension
   for (const group of existingGroups) {
     if (createdGroupIds.has(group.id)) {
       const groupTabs = await chrome.tabs.query({ groupId: group.id });
@@ -142,7 +152,7 @@ async function organizeTabs() {
     
     if (!group.tabIds || group.tabIds.length === 0) continue;
     
-    // Filter to only valid tab IDs
+    // Filter to only valid tab IDs (should all be valid since we filtered input)
     const validTabIds = group.tabIds.filter(id => 
       groupableTabs.some(tab => tab.id === id)
     );

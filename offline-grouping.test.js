@@ -227,12 +227,8 @@ assert(!hasGmailMulti, 'Gmail singleton dropped');
 
 // Test mixed domains
 const mixedGroups = groupTabsOffline(FIXTURE_MIXED_DOMAINS);
-assert(mixedGroups.length >= 1, 'Mixed domains produces at least 1 group');
-// github.com bare domain now uses domain label instead of "GitHub" mega-group
-const hasMixedGithub = mixedGroups.some(g => g.name === 'Github' || g.name === 'GitHub');
-// May be merged into "Other" if it's a singleton among unknowns
-const hasMixedOther = mixedGroups.some(g => g.name === 'Other');
-assert(hasMixedGithub || hasMixedOther, 'Mixed domains includes Github or Other group');
+// All tabs are singletons, so all get filtered out
+assertEqual(mixedGroups.length, 0, 'Mixed domains produces 0 groups (all singletons filtered out)');
 
 // Test ungroupable filtering
 const ungroupableGroups = groupTabsOffline(FIXTURE_WITH_UNGROUPABLE);
@@ -262,12 +258,7 @@ assertEqual(aiGroups.length, 0, 'All AI service singletons dropped (no single-ta
 
 // Test singleton handling
 const singletonGroups = groupTabsOffline(FIXTURE_MANY_SINGLETONS);
-assert(singletonGroups.length <= 2, 'Many singletons merged into 1-2 groups');
-const hasOtherGroup = singletonGroups.some(g => g.name === 'Other');
-assert(hasOtherGroup, 'Many singletons create an "Other" group');
-if (hasOtherGroup) {
-  assertGroupHasTabs(singletonGroups, 'Other', 5, 'Other group contains all 5 singletons');
-}
+assertEqual(singletonGroups.length, 0, 'Many singletons produce no groups (all filtered as singletons)');
 
 // ============================================================================
 // PROJECT EXTRACTION TESTS
