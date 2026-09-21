@@ -204,6 +204,233 @@ function extractProjectContext(tab, url) {
     return null;
   }
   
+  // Figma - group by file to avoid one mega "Figma" dump
+  if (hostname === 'figma.com' || hostname === 'www.figma.com') {
+    // Patterns: /design/:filekey/:filename, /board/:filekey, /proto/:filekey, /file/:filekey
+    // File keys are typically 22+ chars but be lenient for shorter ones too
+    const fileMatch = pathname.match(/^\/(design|board|proto|file|slides|deck)\/([0-9a-zA-Z]{10,128})(?:\/([^\/\?]+))?/);
+    if (fileMatch) {
+      const fileType = fileMatch[1];
+      const fileName = fileMatch[3];
+      
+      // Use file name if present, otherwise use file type
+      if (fileName) {
+        // Clean up the file name - decode URI, replace dashes/underscores with spaces, limit length
+        const cleanName = decodeURIComponent(fileName)
+          .replace(/[-_]/g, ' ')
+          .substring(0, 25);
+        return { groupName: `Figma ${cleanName}`, color: 'pink' };
+      }
+      
+      // Fallback to file type if no name (less useful but better than mega-group)
+      const typeLabel = fileType === 'design' ? 'Design' : fileType === 'board' ? 'Board' : fileType === 'proto' ? 'Proto' : 'File';
+      return { groupName: `Figma ${typeLabel}`, color: 'pink' };
+    }
+    
+    // No file context - return null instead of "Figma" mega-group
+    return null;
+  }
+  
+  // X / Twitter - split by profile, list, search, status to avoid mega-pile
+  if (hostname === 'x.com' || hostname === 'twitter.com') {
+    // Pattern 1: Profile - /username (not starting with i/)
+    const profileMatch = pathname.match(/^\/([a-zA-Z0-9_]{1,15})(?:\/(?:with_replies|media|likes)?)?$/);
+    if (profileMatch && !pathname.startsWith('/i/')) {
+      const handle = profileMatch[1];
+      // Skip special paths
+      if (!['search', 'home', 'explore', 'notifications', 'messages', 'settings', 'compose'].includes(handle)) {
+        return { groupName: `@${handle}`, color: 'grey' };
+      }
+    }
+    
+    // Pattern 2: Status/tweet - /username/status/id or /i/status/id
+    const statusMatch = pathname.match(/^\/(?:([a-zA-Z0-9_]+)\/)?status\/(\d+)/);
+    if (statusMatch) {
+      const handle = statusMatch[1];
+      if (handle) {
+        return { groupName: `@${handle}`, color: 'grey' };
+      }
+      // Generic status without handle
+      return { groupName: 'X Posts', color: 'grey' };
+    }
+    
+    // Pattern 3: Lists - /i/lists/id
+    if (pathname.startsWith('/i/lists/')) {
+      const listMatch = pathname.match(/^\/i\/lists\/(\d+)/);
+      if (listMatch) {
+        // Try to get list name from title if available
+        const listName = title.split('|')[0].trim();
+        if (listName && listName.length > 0 && listName.length < 30 && !listName.toLowerCase().includes('twitter') && !listName.toLowerCase().includes(' / x')) {
+          return { groupName: `X List ${listName}`, color: 'grey' };
+        }
+        return { groupName: 'X Lists', color: 'grey' };
+      }
+    }
+    
+    // Pattern 4: Search - /search?q=...
+    if (pathname === '/search') {
+      const query = searchParams.get('q');
+      if (query) {
+        // Clean and shorten the query
+        const cleanQuery = decodeURIComponent(query)
+          .replace(/[+%20]/g, ' ')
+          .substring(0, 20);
+        return { groupName: `X "${cleanQuery}"`, color: 'grey' };
+      }
+      return { groupName: 'X Search', color: 'grey' };
+    }
+    
+    // Pattern 5: Hashtag - /hashtag/word
+    const hashtagMatch = pathname.match(/^\/hashtag\/([^\/\?]+)/);
+    if (hashtagMatch) {
+      const hashtag = hashtagMatch[1];
+      return { groupName: `#${hashtag}`, color: 'grey' };
+    }
+    
+    // No specific context - return null instead of "Twitter"/"X" mega-group
+    return null;
+  }
+  
+  // Slack - group by workspace and/or channel to avoid mega "Slack"
+  if (hostname === 'app.slack.com') {
+    // Pattern: /client/TWORKSPACE_ID/CHANNEL_ID or /client/TWORKSPACE_ID
+    const clientMatch = pathname.match(/^\/client\/([TE][A-Z0-9]+)(?:\/([C][A-Z0-9]+))?/);
+    if (clientMatch) {
+      const workspaceId = clientMatch[1];
+      const channelId = clientMatch[2];
+      
+      // Try to extract workspace name from title
+      // Title format often: "Channel Name | Workspace Name | Slack" or "Workspace Name | Slack"
+      const titleParts = title.split('|').map(p => p.trim());
+      
+      if (titleParts.length >= 2) {
+        // Remove "Slack" suffix
+        const filtered = titleParts.filter(p => !p.toLowerCase().includes('slack'));
+        
+        if (filtered.length === 2) {
+          // Channel | Workspace
+          const channelName = filtered[0];
+          const workspaceName = filtered[1];
+          if (channelName.length > 0 && channelName.length < 25) {
+            return { groupName: `Slack ${channelName}`, color: 'purple' };
+          }
+        } else if (filtered.length === 1) {
+          // Just workspace name
+          const workspaceName = filtered[0];
+          if (workspaceName.length > 0 && workspaceName.length < 25) {
+            return { groupName: `Slack ${workspaceName}`, color: 'purple' };
+          }
+        }
+      }
+      
+      // Fallback: use channel ID suffix if available
+      if (channelId) {
+        return { groupName: `Slack Ch-${channelId.substring(1, 6)}`, color: 'purple' };
+      }
+      
+      // Fallback: use workspace ID suffix
+      return { groupName: `Slack WS-${workspaceId.substring(1, 6)}`, color: 'purple' };
+    }
+    
+    // No workspace/channel context - return null
+    return null;
+  }
+  
+  // Linear - group by team/project, not one mega "Linear"
+  if (hostname === 'linear.app') {
+    // Pattern 1: Issue - /workspace/issue/TEAMKEY-NUMBER/slug
+    const issueMatch = pathname.match(/^\/[^\/]+\/issue\/([A-Z][A-Z0-9]*)-\d+/);
+    if (issueMatch) {
+      const teamKey = issueMatch[1];
+      return { groupName: `Linear ${teamKey}`, color: 'purple' };
+    }
+    
+    // Pattern 2: Team view - /workspace/team/TEAMKEY or /workspace/TEAMKEY
+    const teamMatch = pathname.match(/^\/[^\/]+\/(?:team\/)?([A-Z][A-Z0-9]{1,10})(?:\/|$)/);
+    if (teamMatch) {
+      const teamKey = teamMatch[1];
+      // Make sure it's uppercase and looks like a team key
+      if (teamKey === teamKey.toUpperCase() && teamKey.length <= 10) {
+        return { groupName: `Linear ${teamKey}`, color: 'purple' };
+      }
+    }
+    
+    // Pattern 3: Project - /workspace/project/slug
+    const projectMatch = pathname.match(/^\/[^\/]+\/project\/([^\/\?]+)/);
+    if (projectMatch) {
+      let projectSlug = projectMatch[1];
+      // Remove trailing ID-like suffix (e.g., -abc123)
+      projectSlug = projectSlug.replace(/-[0-9a-z]{6,}$/i, '');
+      // Clean up slug - replace dashes with spaces, title case, limit length
+      const projectName = projectSlug
+        .replace(/-/g, ' ')
+        .split(' ')
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(' ')
+        .substring(0, 20);
+      return { groupName: `Linear ${projectName}`, color: 'purple' };
+    }
+    
+    // No team/project signal - return null instead of "Linear" mega-group
+    return null;
+  }
+  
+  // Notion - group by workspace or page context, not one mega "Notion"
+  if (hostname === 'notion.so' || hostname === 'www.notion.so' || hostname === 'app.notion.com' || hostname.endsWith('.notion.site')) {
+    // Pattern 1: New format - app.notion.com/p/Page-Title-{32-hex-id}
+    if (hostname === 'app.notion.com' && pathname.startsWith('/p/')) {
+      const pageMatch = pathname.match(/^\/p\/([^\/\?]+)-([0-9a-f]{32})/);
+      if (pageMatch) {
+        const pageTitle = pageMatch[1];
+        // Clean up page title - decode URI, replace dashes with spaces, limit length
+        const cleanTitle = decodeURIComponent(pageTitle)
+          .replace(/-/g, ' ')
+          .substring(0, 20);
+        return { groupName: `Notion ${cleanTitle}`, color: 'grey' };
+      }
+    }
+    
+    // Pattern 2: Old format - notion.so/workspace/Page-Title-{32-hex-id}
+    if ((hostname === 'notion.so' || hostname === 'www.notion.so') && pathname.length > 1) {
+      const oldMatch = pathname.match(/^\/([^\/]+)\/([^\/\?]+)-([0-9a-f]{32})/);
+      if (oldMatch) {
+        const workspace = oldMatch[1];
+        const pageTitle = oldMatch[2];
+        
+        // Use workspace name if it looks reasonable (not a UUID)
+        if (workspace && workspace.length > 0 && workspace.length < 25 && !workspace.match(/^[0-9a-f]{32}$/)) {
+          return { groupName: `Notion ${workspace}`, color: 'grey' };
+        }
+        
+        // Fallback to page title
+        const cleanTitle = decodeURIComponent(pageTitle)
+          .replace(/-/g, ' ')
+          .substring(0, 20);
+        return { groupName: `Notion ${cleanTitle}`, color: 'grey' };
+      }
+      
+      // Simple workspace path - /workspace
+      const workspaceMatch = pathname.match(/^\/([^\/]+)\/?$/);
+      if (workspaceMatch && workspaceMatch[1]) {
+        const workspace = workspaceMatch[1];
+        if (workspace.length > 0 && workspace.length < 25 && !workspace.match(/^[0-9a-f]{32}$/)) {
+          return { groupName: `Notion ${workspace}`, color: 'grey' };
+        }
+      }
+    }
+    
+    // Pattern 3: notion.site - custom domain, use subdomain if available
+    if (hostname.endsWith('.notion.site')) {
+      const subdomain = hostname.replace('.notion.site', '');
+      if (subdomain && subdomain.length > 0 && subdomain.length < 25) {
+        return { groupName: `Notion ${subdomain}`, color: 'grey' };
+      }
+    }
+    
+    // No workspace/page signal - return null instead of "Notion" mega-group
+    return null;
+  }
+  
   // No project context found
   return null;
 }
@@ -244,27 +471,27 @@ const KNOWN_SITES = {
   'serverfault.com': ['Stack Overflow', 'orange', 2],
   'superuser.com': ['Stack Overflow', 'orange', 2],
   
-  // Project Management (Atlassian handled by project extraction)
+  // Project Management (Atlassian, Linear, Notion handled by project extraction)
   'trello.com': ['Trello', 'blue', 1],
   'asana.com': ['Asana', 'pink', 1],
   'monday.com': ['Monday', 'red', 1],
   'clickup.com': ['ClickUp', 'purple', 1],
-  'linear.app': ['Linear', 'purple', 1],
-  'notion.so': ['Notion', 'grey', 1],
-  'notion.site': ['Notion', 'grey', 2],
+  // 'linear.app' removed - use project extraction instead
+  // 'notion.so' removed - use project extraction instead
+  // 'notion.site' removed - use project extraction instead
   'coda.io': ['Coda', 'orange', 1],
   'airtable.com': ['Airtable', 'yellow', 1],
   
-  // Communication
-  'slack.com': ['Slack', 'purple', 1],
+  // Communication (Slack handled by project extraction)
+  // 'slack.com' removed - use project extraction instead
   'discord.com': ['Discord', 'purple', 1],
   'zoom.us': ['Zoom', 'blue', 1],
   'whereby.com': ['Whereby', 'blue', 1],
   'miro.com': ['Miro', 'yellow', 1],
   
-  // Design
-  'figma.com': ['Figma', 'pink', 1],
-  'figjam.com': ['Figma', 'pink', 1],
+  // Design (Figma handled by project extraction)
+  // 'figma.com' removed - use project extraction instead
+  // 'figjam.com' removed - use project extraction instead
   'sketch.com': ['Sketch', 'yellow', 1],
   'framer.com': ['Framer', 'blue', 1],
   'canva.com': ['Canva', 'cyan', 1],
@@ -301,9 +528,9 @@ const KNOWN_SITES = {
   'box.com': ['Box', 'blue', 1],
   'wetransfer.com': ['WeTransfer', 'blue', 1],
   
-  // Social Media
-  'twitter.com': ['Twitter', 'blue', 1],
-  'x.com': ['Twitter', 'grey', 1],
+  // Social Media (X/Twitter handled by project extraction)
+  // 'twitter.com' removed - use project extraction instead
+  // 'x.com' removed - use project extraction instead
   'linkedin.com': ['LinkedIn', 'blue', 1],
   'facebook.com': ['Facebook', 'blue', 1],
   'instagram.com': ['Instagram', 'pink', 1],
@@ -382,12 +609,12 @@ const HOSTNAME_FAMILIES = [
   // Atlassian (fallback only - project extraction should catch most)
   { pattern: /^[^.]+\.atlassian\.net$/, group: 'Atlassian', color: 'blue' },
   
-  // Slack workspaces
-  { pattern: /^[^.]+\.slack\.com$/, group: 'Slack', color: 'purple' },
+  // Slack workspaces (removed - project extraction handles workspace/channel grouping)
+  // { pattern: /^[^.]+\.slack\.com$/, group: 'Slack', color: 'purple' },
   
-  // Notion
-  { pattern: /^[^.]+\.notion\.so$/, group: 'Notion', color: 'grey' },
-  { pattern: /^[^.]+\.notion\.site$/, group: 'Notion', color: 'grey' },
+  // Notion (removed - project extraction handles workspace/page grouping)
+  // { pattern: /^[^.]+\.notion\.so$/, group: 'Notion', color: 'grey' },
+  // { pattern: /^[^.]+\.notion\.site$/, group: 'Notion', color: 'grey' },
   
   // Vercel deployments
   { pattern: /^[^.]+\.vercel\.app$/, group: 'Vercel', color: 'grey' },
