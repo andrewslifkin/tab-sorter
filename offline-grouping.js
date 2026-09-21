@@ -684,15 +684,14 @@ function applyGroupSizePolicy(groups, totalTabs) {
   const knownGroups = groups.filter(g => isKnownGroupName(g.name));
   const unknownGroups = groups.filter(g => !isKnownGroupName(g.name));
   
-  // Always keep all known services separate (even singletons)
-  // These are recognized services the user likely cares about
-  
   // For unknown domains, apply merging rules
   const unknownSingletons = unknownGroups.filter(g => g.tabIds.length === 1);
   const unknownMulti = unknownGroups.filter(g => g.tabIds.length > 1);
   
   // If we have too many groups total, merge smallest unknowns
   const totalGroupCount = knownGroups.length + unknownGroups.length;
+  
+  let resultGroups;
   
   if (totalGroupCount > 12) {
     // Sort unknown by size
@@ -709,23 +708,26 @@ function applyGroupSizePolicy(groups, totalTabs) {
         color: 'grey',
         tabIds: toMerge.flatMap(g => g.tabIds)
       };
-      return [...knownGroups, ...toKeep, otherGroup];
+      resultGroups = [...knownGroups, ...toKeep, otherGroup];
+    } else {
+      resultGroups = [...knownGroups, ...unknownGroups];
     }
-  }
-  
-  // Handle unknown singletons: if 3+ unknown orphans, create "Other" group
-  // But keep known service singletons separate
-  if (unknownSingletons.length >= 3) {
+  } else if (unknownSingletons.length >= 3) {
+    // Handle unknown singletons: if 3+ unknown orphans, create "Other" group
     const otherGroup = {
       name: 'Other',
       color: 'grey',
       tabIds: unknownSingletons.flatMap(g => g.tabIds)
     };
-    return [...knownGroups, ...unknownMulti, otherGroup];
+    resultGroups = [...knownGroups, ...unknownMulti, otherGroup];
+  } else {
+    // Otherwise keep everything separate
+    resultGroups = groups;
   }
   
-  // Otherwise keep everything separate
-  return groups;
+  // HARD RULE: Never create a Chrome tab group for a single URL/tab
+  // Drop any group with fewer than 2 tabs - applies to ALL groups including known services
+  return resultGroups.filter(g => g.tabIds.length >= 2);
 }
 
 /**

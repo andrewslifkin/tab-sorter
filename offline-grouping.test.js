@@ -204,26 +204,26 @@ console.log('\n=== Grouping Tests ===\n');
 
 // Test work morning fixture
 const workGroups = groupTabsOffline(FIXTURE_WORK_MORNING);
-assert(workGroups.length > 0, 'Work morning produces groups');
-assert(workGroups.length <= 12, 'Work morning produces ≤12 groups');
-assertGroupExists(workGroups, 'Gmail', 'Work morning includes Gmail group');
-// GitHub /pulls page now uses domain label instead of mega-group
-const hasGithubGroup = workGroups.some(g => g.name === 'Github' || g.name === 'GitHub');
-assert(hasGithubGroup, 'Work morning includes Github group (domain label)');
-assertGroupExists(workGroups, 'Slack', 'Work morning includes Slack group');
+// Only Google Docs group should remain (2 tabs: Docs + Sheets)
+// All other services are singletons and should be dropped
+assertEqual(workGroups.length, 1, 'Work morning produces only 1 group (others are singletons)');
 assertGroupExists(workGroups, 'Google Docs', 'Work morning includes Google Docs group');
 assertGroupHasTabs(workGroups, 'Google Docs', 2, 'Google Docs group has 2 tabs (Docs + Sheets)');
-
-// Note: Jira tabs in FIXTURE_WORK_MORNING now extract to project-specific groups instead of "Atlassian"
-const hasJiraGroup = workGroups.some(g => g.name.startsWith('Jira') || g.name === 'Atlassian');
-assert(hasJiraGroup, 'Work morning includes Jira/Atlassian group');
+// Gmail, Slack, GitHub, Jira ENG, Notion, Figma, Linear, Stack Overflow are all singletons and dropped
+const hasGmail = workGroups.some(g => g.name === 'Gmail');
+const hasSlack = workGroups.some(g => g.name === 'Slack');
+assert(!hasGmail, 'Gmail singleton dropped');
+assert(!hasSlack, 'Slack singleton dropped');
 
 // Test multi-Google fixture
 const googleGroups = groupTabsOffline(FIXTURE_MULTI_GOOGLE);
-assert(googleGroups.length >= 2 && googleGroups.length <= 4, 'Multi-Google produces 2-4 groups');
-assertGroupExists(googleGroups, 'Gmail', 'Multi-Google includes Gmail');
+// Only Google Docs group should remain (3 tabs: Docs + Sheets + Slides)
+// Gmail, Drive, Calendar are singletons and should be dropped
+assertEqual(googleGroups.length, 1, 'Multi-Google produces 1 group (others are singletons)');
 assertGroupExists(googleGroups, 'Google Docs', 'Multi-Google includes Google Docs');
 assertGroupHasTabs(googleGroups, 'Google Docs', 3, 'Google Docs merges Docs/Sheets/Slides');
+const hasGmailMulti = googleGroups.some(g => g.name === 'Gmail');
+assert(!hasGmailMulti, 'Gmail singleton dropped');
 
 // Test mixed domains
 const mixedGroups = groupTabsOffline(FIXTURE_MIXED_DOMAINS);
@@ -236,24 +236,29 @@ assert(hasMixedGithub || hasMixedOther, 'Mixed domains includes Github or Other 
 
 // Test ungroupable filtering
 const ungroupableGroups = groupTabsOffline(FIXTURE_WITH_UNGROUPABLE);
-assert(ungroupableGroups.length === 2, 'Ungroupable fixture produces 2 groups (Github + Gmail)');
+// GitHub and Gmail are both singletons after filtering ungroupable tabs, so they're dropped
+assertEqual(ungroupableGroups.length, 0, 'Ungroupable fixture produces 0 groups (singletons dropped)');
 const totalTabs = ungroupableGroups.reduce((sum, g) => sum + g.tabIds.length, 0);
-assertEqual(totalTabs, 2, 'Ungroupable fixture groups only 2 tabs (excludes chrome:// and pinned)');
+assertEqual(totalTabs, 0, 'No tabs grouped (chrome:// excluded, remaining are singletons)');
 
-// Test cloud providers
+// Test cloud providers - all singletons, should produce "Other" group or no groups
 const cloudGroups = groupTabsOffline(FIXTURE_CLOUD_PROVIDERS);
-assertGroupExists(cloudGroups, 'AWS', 'Cloud fixture includes AWS');
-assertGroupExists(cloudGroups, 'Azure', 'Cloud fixture includes Azure');
-assertGroupExists(cloudGroups, 'Google Cloud', 'Cloud fixture includes Google Cloud');
-assertGroupExists(cloudGroups, 'Vercel', 'Cloud fixture includes Vercel');
-assertGroupExists(cloudGroups, 'Netlify', 'Cloud fixture includes Netlify');
+// All cloud providers are singletons, so they get merged into "Other" or dropped
+// Since there are 5 singletons (>= 3), they should be merged into "Other"
+const hasOtherCloudGroup = cloudGroups.some(g => g.name === 'Other');
+if (hasOtherCloudGroup) {
+  assertGroupExists(cloudGroups, 'Other', 'Cloud singletons merged into Other');
+  assertGroupHasTabs(cloudGroups, 'Other', 5, 'Other group contains all 5 cloud providers');
+} else {
+  // Or all dropped if classification creates individual groups
+  assertEqual(cloudGroups.length, 0, 'All cloud provider singletons dropped');
+}
 
-// Test AI services
+// Test AI services - all singletons, should be dropped or merged
 const aiGroups = groupTabsOffline(FIXTURE_AI_SERVICES);
-assertGroupExists(aiGroups, 'ChatGPT', 'AI fixture includes ChatGPT');
-assertGroupExists(aiGroups, 'Claude', 'AI fixture includes Claude');
-assertGroupExists(aiGroups, 'Gemini', 'AI fixture includes Gemini');
-assertGroupExists(aiGroups, 'Perplexity', 'AI fixture includes Perplexity');
+// All AI services are singletons (1 tab each), should not create groups
+// Since there are 4 known services, they stay separate during classification but get filtered
+assertEqual(aiGroups.length, 0, 'All AI service singletons dropped (no single-tab groups)');
 
 // Test singleton handling
 const singletonGroups = groupTabsOffline(FIXTURE_MANY_SINGLETONS);
@@ -274,55 +279,61 @@ console.log('\n=== Project Extraction Tests ===\n');
 const jiraProjectGroups = groupTabsOffline(FIXTURE_MULTI_JIRA_PROJECTS);
 assertGroupExists(jiraProjectGroups, 'Jira PROOF', 'Multi-Jira includes PROOF project');
 assertGroupExists(jiraProjectGroups, 'Jira MARKET', 'Multi-Jira includes MARKET project');
-assertGroupExists(jiraProjectGroups, 'Jira ENG', 'Multi-Jira includes ENG project');
 assertGroupHasTabs(jiraProjectGroups, 'Jira PROOF', 2, 'Jira PROOF has 2 issues');
 assertGroupHasTabs(jiraProjectGroups, 'Jira MARKET', 2, 'Jira MARKET has 2 issues');
-assertGroupHasTabs(jiraProjectGroups, 'Jira ENG', 1, 'Jira ENG has 1 issue');
-assert(jiraProjectGroups.length === 3, 'Multi-Jira creates 3 separate project groups');
+// Jira ENG singleton should be dropped (no single-tab groups)
+const hasJiraENG = jiraProjectGroups.some(g => g.name === 'Jira ENG');
+assert(!hasJiraENG, 'Jira ENG singleton is dropped (no single-tab groups allowed)');
+assert(jiraProjectGroups.length === 2, 'Multi-Jira creates 2 groups (singleton ENG dropped)');
 
-// Test Confluence spaces - should NOT collapse into one group
+// Test Confluence spaces - only multi-tab groups remain
 const confluenceGroups = groupTabsOffline(FIXTURE_CONFLUENCE_SPACES);
+// ENG has 2 tabs, PROD and MKT are singletons and dropped
 assertGroupExists(confluenceGroups, 'Confluence ENG', 'Confluence includes ENG space');
-assertGroupExists(confluenceGroups, 'Confluence PROD', 'Confluence includes PROD space');
-assertGroupExists(confluenceGroups, 'Confluence MKT', 'Confluence includes MKT space');
 assertGroupHasTabs(confluenceGroups, 'Confluence ENG', 2, 'Confluence ENG has 2 pages');
-assert(confluenceGroups.length === 3, 'Confluence creates 3 separate space groups');
+assertEqual(confluenceGroups.length, 1, 'Confluence creates 1 group (PROD and MKT singletons dropped)');
+const hasPROD = confluenceGroups.some(g => g.name === 'Confluence PROD');
+const hasMKT = confluenceGroups.some(g => g.name === 'Confluence MKT');
+assert(!hasPROD, 'Confluence PROD singleton dropped');
+assert(!hasMKT, 'Confluence MKT singleton dropped');
 
-// Test SharePoint sites - should NOT collapse into one group
+// Test SharePoint sites - only multi-tab groups remain
 const sharepointGroups = groupTabsOffline(FIXTURE_SHAREPOINT_SITES);
+// Engineering has 2 tabs, Marketing and HR Portal are singletons and dropped
 assertGroupExists(sharepointGroups, 'SP Engineering', 'SharePoint includes Engineering site');
-assertGroupExists(sharepointGroups, 'SP Marketing', 'SharePoint includes Marketing site');
-assertGroupExists(sharepointGroups, 'SP Hr Portal', 'SharePoint includes HR Portal site');
 assertGroupHasTabs(sharepointGroups, 'SP Engineering', 2, 'SP Engineering has 2 pages');
-assert(sharepointGroups.length === 3, 'SharePoint creates 3 separate site groups');
+assertEqual(sharepointGroups.length, 1, 'SharePoint creates 1 group (Marketing and HR Portal singletons dropped)');
+const hasMarketing = sharepointGroups.some(g => g.name === 'SP Marketing');
+const hasHR = sharepointGroups.some(g => g.name === 'SP Hr Portal');
+assert(!hasMarketing, 'SP Marketing singleton dropped');
+assert(!hasHR, 'SP Hr Portal singleton dropped');
 
-// Test mixed Microsoft - should NOT all be "Microsoft"
+// Test mixed Microsoft - all singletons, should produce no groups
 const mixedMsGroups = groupTabsOffline(FIXTURE_MIXED_MICROSOFT);
-assertGroupExists(mixedMsGroups, 'Outlook', 'Mixed Microsoft includes Outlook');
-assertGroupExists(mixedMsGroups, 'Teams Engineering Team', 'Mixed Microsoft includes Engineering Team');
-assertGroupExists(mixedMsGroups, 'Teams Marketing Team', 'Mixed Microsoft includes Marketing Team');
-assertGroupExists(mixedMsGroups, 'SP Engineering', 'Mixed Microsoft includes Engineering SharePoint');
-assertGroupExists(mixedMsGroups, 'OneDrive', 'Mixed Microsoft includes OneDrive');
-assert(mixedMsGroups.length === 5, 'Mixed Microsoft creates 5 separate groups (not one Microsoft mega-group)');
+// All services are singletons (Outlook, Teams x2, SharePoint, OneDrive), should be dropped
+assertEqual(mixedMsGroups.length, 0, 'Mixed Microsoft produces 0 groups (all singletons dropped)');
 const hasMicrosoftMegaGroup = mixedMsGroups.some(g => g.name === 'Microsoft' && g.tabIds.length > 1);
 assert(!hasMicrosoftMegaGroup, 'Mixed Microsoft does NOT create a Microsoft mega-group');
 
-// Test GitHub repos - should group by repo
+// Test GitHub repos - only multi-tab groups remain
 const githubRepoGroups = groupTabsOffline(FIXTURE_GITHUB_REPOS);
+// tab-sorter has 2 tabs (Issues + PRs), awesome-project and dashboard are singletons
 assertGroupExists(githubRepoGroups, 'andrewslifkin/tab-sorter', 'GitHub includes tab-sorter repo with org/repo format');
-assertGroupExists(githubRepoGroups, 'someorg/awesome-project', 'GitHub includes awesome-project repo with org/repo format');
-// Dashboard page uses domain label
-const hasDashboard = githubRepoGroups.some(g => g.name === 'Github' || g.name === 'GitHub');
-assert(hasDashboard, 'GitHub includes Github domain label for dashboard');
 assertGroupHasTabs(githubRepoGroups, 'andrewslifkin/tab-sorter', 2, 'tab-sorter repo has 2 tabs');
-assert(githubRepoGroups.length === 3, 'GitHub creates 3 groups (2 repos + dashboard)');
+assertEqual(githubRepoGroups.length, 1, 'GitHub creates 1 group (awesome-project and dashboard singletons dropped)');
+const hasAwesomeProject = githubRepoGroups.some(g => g.name === 'someorg/awesome-project');
+const hasDashboard = githubRepoGroups.some(g => g.name === 'Github' || g.name === 'GitHub');
+assert(!hasAwesomeProject, 'awesome-project singleton dropped');
+assert(!hasDashboard, 'dashboard singleton dropped');
 
-// Test Azure DevOps projects
+// Test Azure DevOps projects - only multi-tab groups remain
 const adoGroups = groupTabsOffline(FIXTURE_AZURE_DEVOPS);
+// Project Alpha has 2 tabs, Project Beta is a singleton
 assertGroupExists(adoGroups, 'ADO Project Alpha', 'Azure DevOps includes Project Alpha');
-assertGroupExists(adoGroups, 'ADO Project Beta', 'Azure DevOps includes Project Beta');
 assertGroupHasTabs(adoGroups, 'ADO Project Alpha', 2, 'ADO Project Alpha has 2 tabs');
-assert(adoGroups.length === 2, 'Azure DevOps creates 2 project groups');
+assertEqual(adoGroups.length, 1, 'Azure DevOps creates 1 group (Project Beta singleton dropped)');
+const hasBeta = adoGroups.some(g => g.name === 'ADO Project Beta');
+assert(!hasBeta, 'ADO Project Beta singleton dropped');
 
 // ============================================================================
 // DETERMINISM TESTS
@@ -357,13 +368,12 @@ const onlyUngroupable = [
 const ungroupableOnly = groupTabsOffline(onlyUngroupable);
 assertEqual(ungroupableOnly.length, 0, 'Only ungroupable tabs produces no groups');
 
-// Single groupable tab
+// Single groupable tab - should produce NO groups (singleton dropped)
 const singleTab = [
   { id: 1, title: 'GitHub', url: 'https://github.com/', pinned: false },
 ];
 const singleGroups = groupTabsOffline(singleTab);
-assertEqual(singleGroups.length, 1, 'Single tab produces one group');
-assertEqual(singleGroups[0].tabIds.length, 1, 'Single group contains one tab');
+assertEqual(singleGroups.length, 0, 'Single tab produces no groups (singletons dropped)');
 
 // ============================================================================
 // NO MEGA-GROUP REGRESSION TESTS
@@ -394,8 +404,8 @@ const sharepointNoSite = [
 const sharepointNoSiteGroups = groupTabsOffline(sharepointNoSite);
 const hasSharePointMegaGroup = sharepointNoSiteGroups.some(g => g.name === 'SharePoint');
 assert(!hasSharePointMegaGroup, 'SharePoint without site does NOT create "SharePoint" mega-group');
-const hasContosoSharePoint = sharepointNoSiteGroups.some(g => g.name === 'contoso SharePoint');
-assert(hasContosoSharePoint, 'SharePoint without site uses tenant name');
+// Singleton is dropped, so no groups created
+assertEqual(sharepointNoSiteGroups.length, 0, 'SharePoint singleton dropped (would have used tenant name)');
 
 // Test: Teams without team name should NOT create "Microsoft Teams" mega-group
 const teamsNoName = [
@@ -412,8 +422,8 @@ const adoNoProject = [
 const adoNoProjectGroups = groupTabsOffline(adoNoProject);
 const hasADOMegaGroup = adoNoProjectGroups.some(g => g.name === 'Azure DevOps');
 assert(!hasADOMegaGroup, 'Azure DevOps without project does NOT create "Azure DevOps" mega-group');
-const hasADOOrg = adoNoProjectGroups.some(g => g.name === 'ADO myorg');
-assert(hasADOOrg, 'Azure DevOps without project uses org name');
+// Singleton is dropped, so no groups created
+assertEqual(adoNoProjectGroups.length, 0, 'Azure DevOps singleton dropped (would have used org name)');
 
 // Test: GitHub dashboard should NOT create "GitHub" mega-group, use domain label
 const githubDashboard = [
@@ -455,6 +465,84 @@ assertEqual(githubOrgClass.groupName, 'facebook', 'GitHub org page extracts org 
 const githubRepoShort = { id: 1, title: 'react', url: 'https://github.com/facebook/react', pinned: false };
 const githubRepoShortClass = classifyTab(githubRepoShort);
 assertEqual(githubRepoShortClass.groupName, 'facebook/react', 'GitHub repo uses org/repo format when length is reasonable');
+
+// ============================================================================
+// SINGLETON FILTERING TESTS (NEW HARD RULE)
+// ============================================================================
+
+console.log('\n=== Singleton Filtering Tests ===\n');
+
+// Test: Known service singletons should be dropped
+const knownServiceSingleton = [
+  { id: 1, title: 'Gmail', url: 'https://mail.google.com/', pinned: false },
+  { id: 2, title: 'Slack Channel', url: 'https://mycompany.slack.com/messages/general', pinned: false },
+  { id: 3, title: 'Docs 1', url: 'https://docs.google.com/document/d/abc', pinned: false },
+  { id: 4, title: 'Docs 2', url: 'https://docs.google.com/document/d/xyz', pinned: false },
+];
+const knownSingletonGroups = groupTabsOffline(knownServiceSingleton);
+// Gmail singleton and Slack singleton should be dropped, Google Docs multi-tab group should remain
+const hasGmailSingleton = knownSingletonGroups.some(g => g.name === 'Gmail');
+const hasSlackSingleton = knownSingletonGroups.some(g => g.name === 'Slack');
+assert(!hasGmailSingleton, 'Known service singleton (Gmail) is dropped');
+assert(!hasSlackSingleton, 'Known service singleton (Slack) is dropped');
+assertGroupExists(knownSingletonGroups, 'Google Docs', 'Multi-tab Google Docs group remains');
+assertGroupHasTabs(knownSingletonGroups, 'Google Docs', 2, 'Google Docs has 2 tabs');
+assertEqual(knownSingletonGroups.length, 1, 'Only multi-tab groups remain');
+
+// Test: Project extraction singletons should be dropped
+const projectSingletons = [
+  { id: 1, title: '[PROJ1-123]', url: 'https://company.atlassian.net/browse/PROJ1-123', pinned: false },
+  { id: 2, title: '[PROJ2-456]', url: 'https://company.atlassian.net/browse/PROJ2-456', pinned: false },
+  { id: 3, title: '[PROJ2-789]', url: 'https://company.atlassian.net/browse/PROJ2-789', pinned: false },
+];
+const projectSingletonGroups = groupTabsOffline(projectSingletons);
+// PROJ1 singleton should be dropped, PROJ2 with 2 tabs should remain
+const hasProj1 = projectSingletonGroups.some(g => g.name === 'Jira PROJ1');
+assert(!hasProj1, 'Project extraction singleton (PROJ1) is dropped');
+assertGroupExists(projectSingletonGroups, 'Jira PROJ2', 'Multi-tab project group (PROJ2) remains');
+assertGroupHasTabs(projectSingletonGroups, 'Jira PROJ2', 2, 'PROJ2 has 2 tabs');
+assertEqual(projectSingletonGroups.length, 1, 'Only multi-tab project groups remain');
+
+// Test: Unknown domain singletons should be dropped
+const unknownSingletons = [
+  { id: 1, title: 'Site 1', url: 'https://site1.example/', pinned: false },
+  { id: 2, title: 'Site 2', url: 'https://site2.example/', pinned: false },
+  { id: 3, title: 'Site 3a', url: 'https://site3.example/page1', pinned: false },
+  { id: 4, title: 'Site 3b', url: 'https://site3.example/page2', pinned: false },
+];
+const unknownSingletonGroups = groupTabsOffline(unknownSingletons);
+// Site1 and Site2 singletons should be dropped, Site3 with 2 tabs should remain
+const hasSite1 = unknownSingletonGroups.some(g => g.name === 'Site1');
+const hasSite2 = unknownSingletonGroups.some(g => g.name === 'Site2');
+assert(!hasSite1, 'Unknown domain singleton (Site1) is dropped');
+assert(!hasSite2, 'Unknown domain singleton (Site2) is dropped');
+assertGroupExists(unknownSingletonGroups, 'Site3', 'Multi-tab unknown domain group (Site3) remains');
+assertGroupHasTabs(unknownSingletonGroups, 'Site3', 2, 'Site3 has 2 tabs');
+assertEqual(unknownSingletonGroups.length, 1, 'Only multi-tab unknown groups remain');
+
+// Test: All singletons result in empty groups array
+const allSingletons = [
+  { id: 1, title: 'Gmail', url: 'https://mail.google.com/', pinned: false },
+  { id: 2, title: 'GitHub', url: 'https://github.com/', pinned: false },
+  { id: 3, title: 'LinkedIn', url: 'https://linkedin.com/', pinned: false },
+];
+const allSingletonsGroups = groupTabsOffline(allSingletons);
+assertEqual(allSingletonsGroups.length, 0, 'All singletons result in no groups');
+
+// Test: Regression - multi-tab groups still work correctly
+const multiTabGroups = [
+  { id: 1, title: 'Gmail 1', url: 'https://mail.google.com/mail/u/0/', pinned: false },
+  { id: 2, title: 'Gmail 2', url: 'https://mail.google.com/mail/u/1/', pinned: false },
+  { id: 3, title: 'Docs 1', url: 'https://docs.google.com/document/d/abc', pinned: false },
+  { id: 4, title: 'Docs 2', url: 'https://docs.google.com/document/d/xyz', pinned: false },
+  { id: 5, title: 'Sheets 1', url: 'https://sheets.google.com/spreadsheets/d/123', pinned: false },
+];
+const multiGroups = groupTabsOffline(multiTabGroups);
+assertGroupExists(multiGroups, 'Gmail', 'Multi-tab Gmail group created');
+assertGroupExists(multiGroups, 'Google Docs', 'Multi-tab Google Docs group created');
+assertGroupHasTabs(multiGroups, 'Gmail', 2, 'Gmail has 2 tabs');
+assertGroupHasTabs(multiGroups, 'Google Docs', 3, 'Google Docs has 3 tabs (Docs + Sheets)');
+assert(multiGroups.length >= 2, 'Multi-tab groups work correctly');
 
 // ============================================================================
 // RESULTS
