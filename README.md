@@ -83,7 +83,6 @@ Offline mode uses a comprehensive rules-based engine that:
 **To use offline mode**: Select "Offline" in the options page. No API key needed.
 
 **Auto-fallback**: If you use an AI provider and it fails (network error, blocked by firewall, etc.), the extension automatically falls back to offline grouping and shows a notification: "Offline grouping (API unavailable)".
-
 ## Usage
 
 1. **Open multiple tabs** in a Chrome window with various content (e.g., news, social media, documentation, shopping)
@@ -129,6 +128,7 @@ Offline mode uses a comprehensive rules-based engine that:
 
 **Both modes**:
 - Existing tab groups in the window are ungrouped before reorganizing
+- The AI analyzes tab titles and hostnames (not full page content)
 - Groups are assigned colors from Chrome's available palette
 - Each group gets a short, descriptive name
 
@@ -265,7 +265,6 @@ This extension:
 - The extension automatically used offline mode as fallback
 - Your tabs were still organized successfully!
 - To avoid this, select Offline as your primary provider
-
 ## License
 
 MIT License - feel free to modify and distribute.

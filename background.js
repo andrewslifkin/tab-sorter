@@ -2,7 +2,6 @@
 
 // Import offline grouping module
 importScripts('offline-grouping.js');
-
 // Listen for extension icon click
 chrome.action.onClicked.addListener(async (tab) => {
   try {
