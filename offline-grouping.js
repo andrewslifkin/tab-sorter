@@ -434,7 +434,6 @@ const AVAILABLE_COLORS = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'pur
 
 // Default colors for common group categories
 const DEFAULT_COLORS = {
-  'Other': 'grey',
   'News': 'grey',
   'Social': 'blue',
   'Shopping': 'orange',
@@ -552,8 +551,9 @@ function classifyTab(tab) {
     };
     
   } catch (e) {
-    // Fallback for invalid URLs
-    return { groupName: 'Other', color: 'grey' };
+    // Fallback for invalid URLs - use domain label instead of "Other"
+    const domainLabel = 'Unknown';
+    return { groupName: domainLabel, color: 'grey' };
   }
 }
 
@@ -674,87 +674,29 @@ function assignColorForDomain(label) {
 }
 
 /**
- * Apply group size policy: merge small groups, cap at 12, handle singletons
+ * Apply group size policy: enforce minimum 2 tabs per group, cap large groups
+ * Never create an "Other" catch-all group - unknown singletons stay ungrouped
  * @param {Array} groups
  * @param {number} totalTabs
  * @returns {Array}
  */
 function applyGroupSizePolicy(groups, totalTabs) {
-  // Separate known services from unknown domains
-  const knownGroups = groups.filter(g => isKnownGroupName(g.name));
-  const unknownGroups = groups.filter(g => !isKnownGroupName(g.name));
+  // Filter out any groups with fewer than 2 tabs
+  // Chrome requires at least 2 tabs to form a group
+  const validGroups = groups.filter(g => g.tabIds.length >= 2);
   
-  // For unknown domains, apply merging rules
-  const unknownSingletons = unknownGroups.filter(g => g.tabIds.length === 1);
-  const unknownMulti = unknownGroups.filter(g => g.tabIds.length > 1);
-  
-  // If we have too many groups total, merge smallest unknowns
-  const totalGroupCount = knownGroups.length + unknownGroups.length;
-  
-  let resultGroups;
-  
-  if (totalGroupCount > 12) {
-    // Sort unknown by size
-    unknownGroups.sort((a, b) => a.tabIds.length - b.tabIds.length);
-    
-    // Calculate how many unknowns to merge
-    const maxUnknowns = 12 - knownGroups.length - 1; // -1 for "Other" group
-    const toMerge = unknownGroups.slice(0, Math.max(0, unknownGroups.length - maxUnknowns));
-    const toKeep = unknownGroups.slice(toMerge.length);
-    
-    if (toMerge.length > 0) {
-      const otherGroup = {
-        name: 'Other',
-        color: 'grey',
-        tabIds: toMerge.flatMap(g => g.tabIds)
+  // Cap individual groups at 12 tabs max
+  const cappedGroups = validGroups.map(g => {
+    if (g.tabIds.length > 12) {
+      return {
+        ...g,
+        tabIds: g.tabIds.slice(0, 12)
       };
-      resultGroups = [...knownGroups, ...toKeep, otherGroup];
-    } else {
-      resultGroups = [...knownGroups, ...unknownGroups];
     }
-  } else if (unknownSingletons.length >= 3) {
-    // Handle unknown singletons: if 3+ unknown orphans, create "Other" group
-    const otherGroup = {
-      name: 'Other',
-      color: 'grey',
-      tabIds: unknownSingletons.flatMap(g => g.tabIds)
-    };
-    resultGroups = [...knownGroups, ...unknownMulti, otherGroup];
-  } else {
-    // Otherwise keep everything separate
-    resultGroups = groups;
-  }
+    return g;
+  });
   
-  // HARD RULE: Never create a Chrome tab group for a single URL/tab
-  // Drop any group with fewer than 2 tabs - applies to ALL groups including known services
-  return resultGroups.filter(g => g.tabIds.length >= 2);
-}
-
-/**
- * Check if a group name is from our known sites/families
- * @param {string} name
- * @returns {boolean}
- */
-function isKnownGroupName(name) {
-  // Check if name appears in KNOWN_SITES values
-  const knownNames = new Set(
-    Object.values(KNOWN_SITES).map(([n]) => n)
-  );
-  
-  // Check if name appears in HOSTNAME_FAMILIES
-  const familyNames = new Set(
-    HOSTNAME_FAMILIES.map(f => f.group)
-  );
-  
-  // Check if it's a project-based group (starts with known prefixes)
-  const isProjectGroup = 
-    name.startsWith('Jira ') ||
-    name.startsWith('Confluence ') ||
-    name.startsWith('SP ') ||
-    name.startsWith('Teams ') ||
-    name.startsWith('ADO ');
-  
-  return knownNames.has(name) || familyNames.has(name) || Object.keys(DEFAULT_COLORS).includes(name) || isProjectGroup;
+  return cappedGroups;
 }
 
 // ============================================================================
